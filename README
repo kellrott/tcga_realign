@@ -1,0 +1,6 @@
+
+Setup
+
+1) Add list of network attached volumes to volume.list
+
+2) Configure 'align.conf', set KEYFILE and ASSIGNEE

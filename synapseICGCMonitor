@@ -1,0 +1,340 @@
+#!/usr/bin/env python
+"""
+Tracker for ICGC realignment of TCGA data
+"""
+import argparse
+import os
+import subprocess
+import sys
+import synapseclient
+import json
+from synapseclient.exceptions import *
+import itertools
+import collections
+TRACKER_ID='syn2364746'#'syn2381825' #
+SPLIT_TRACKER_ID = 'syn2381914'
+
+
+state_path = {
+    'unassigned' : 'todownload',
+    'todownload' : 'downloading',
+    'downloading' : 'downloaded',
+    'downloaded' : 'splitting',
+    'splitting' : 'split',
+    'split' : 'aligning',
+    'aligning' : 'aligned',
+    'aligned' : 'uploading',
+    'uploading' : 'uploaded'
+}
+
+active_states = [
+    'downloading',
+    'splitting',
+    'aligning',
+    'uploading'
+]
+
+def getBamForWork(args, syn):
+    """Returns highest priority unassigned BAM files and changes status to downloading.
+
+    Queries the list of remaining unassigned samples orderd by
+    fileSize and tries to change status of to splitting of largest.  If successfull it returns the highest 
+    """
+    ids = getOrderedListOfUnassigned(syn)
+    sys.stderr.write('%i Unprocessed TCGA Samples\n' %len(ids))
+    i = 0 
+    j = 0
+    out = sys.stdout if args.out is None else open(args.out, "w")
+    while True:
+        if j >= args.count:
+            return 0
+        if i==len(ids):
+            sys.stderr.write('No more samples available\n')
+            return 1
+        ent = syn.get(ids[i], downloadFile=False)
+        if ent.status[0] !='unassigned': 
+            i+=1 
+            continue
+        ent.assignee = args.assignee
+        ent.status = state_path['unassigned']  #Sets state to todownload
+        try:
+            syn.store(ent, forceVersion=False)
+            out.write("%s\n" % ent.accession_identifier[0])
+            j+=1
+        except SynapseHTTPError:
+            i+=1
+    out.close()
+    return 0
+    
+
+def getOrderedListOfUnassigned(syn):
+    """Performs a query and filters out donors with more than two files
+    and return a list of ids inversly sorted by fileSize.
+    """
+    QUERY= "select accession_identifier, donor_identifier, fileSize, notIllumina from file where parentId=='%s' and location=='CGHub' and status=='unassigned'" %TRACKER_ID
+    results = list(syn.chunkedQuery(QUERY))
+
+    #Determine the donor ids of the samples with two files
+    donors = syn.chunkedQuery("select donor_identifier from file where parentId=='%s' and location=='CGHub'" %TRACKER_ID)
+    donorCounts = collections.Counter([result['file.donor_identifier'][0] for result in donors])
+    donors = [donor for donor, count in donorCounts.iteritems() if count==2]
+
+    #Go through query result and remove rows not in donor list and notillumina==True
+    fileSizes=list()
+    accessions=list()
+    ids = list()
+    donor_ids = list()
+    for result in results:
+        if result['file.donor_identifier'][0] in donors and result['file.notIllumina'] is None:
+            fileSizes.append(result['file.fileSize'][0] if result['file.fileSize'] is not None else None)
+            accessions.append(result['file.accession_identifier'][0])
+            ids.append(result['file.id'])
+            donor_ids.append(result['file.donor_identifier'][0])
+
+    #If there are unassigned partner samples put those in the beginning
+    counts = collections.Counter(donor_ids) 
+    counts = [counts[id] for id in donor_ids]  #Number of unassigned donor ids in list
+    
+    #Sort by fileSize
+    idx = argsort(fileSizes)    
+    ids = [ids[i] for i in idx[::-1]]
+    counts = [counts[i] for i in idx[::-1]]
+    fileSizes = [fileSizes[i] for i in idx[::-1]]
+
+    #Resort by counts
+    idx = argsort(counts)    
+    ids = [ids[i] for i in idx]
+    counts = [counts[i] for i in idx]
+    fileSizes = [fileSizes[i] for i in idx]
+
+    return ids
+    
+def addBamGroups(args, syn):
+    """Adds file entitie for each of the split bam file """
+    id =list(syn.chunkedQuery("select id from file where parentId=='%s' and accession_identifier=='%s'" %(TRACKER_ID, args.accession)))
+    if len(id)==0:
+        raise Exception('The accession id used is invalid')
+    else:
+        id = id[0]['file.id']
+
+    a = subprocess.Popen("samtools view -H %s | grep '^@RG'" % (args.path), stdout=subprocess.PIPE, shell=True)
+    stdout, stderr = a.communicate()
+
+    for line in stdout.split("\n"):
+        info = line.split("\t")[1:]
+        rg_id = None
+        for b in info:
+            if b.startswith("ID:"):
+                rg_id = b[3:]
+        if rg_id is not None:
+            id =list(syn.chunkedQuery("select id from file where parentId=='%s' and derived_accession=='%s' and readgroup=='%s'" %(SPLIT_TRACKER_ID, args.accession, rg_id)))
+            if len(id) == 0:                    
+                file = synapseclient.File(args.path + "." + rg_id , parent=SPLIT_TRACKER_ID, synapseStore=False)
+                #file.host = args.host
+                file.status = 'unassigned'
+                file.readgroup = rg_id
+                file.readgroup_line = line
+                file.derived_accession = args.accession
+                #file.assignee = None
+                syn.store(file, used = [id])
+            else:
+                raise Exception('Readgroup already stored')
+    return 0
+
+
+def getAssignmentForWork(args, syn):
+    if args.status not in state_path:
+        sys.stderr.write('Unknown State: %s\n' % (args.status))
+        return 1
+
+    ids = list(syn.chunkedQuery("select id from file where parentId=='%s' and assignee=='%s' and status=='%s'" % (TRACKER_ID, args.assignee, args.status)))
+    i = 0
+    out = sys.stdout
+    while True:
+        if i==len(ids):
+            sys.stderr.write('No more assignments available\n')
+            return 1
+        ent = syn.get(ids[i]['file.id'], downloadFile=False)
+        if ent.status[0] != args.status: 
+            i+=1 
+            continue        
+        ent.status = state_path[args.status]
+        try:
+            syn.store(ent, forceVersion=False)
+            out.write("%s\n" % ent.accession_identifier[0])
+            break
+        except SynapseHTTPError:
+            i+=1
+    return 0
+
+def returnAssignment(args, syn):
+    
+    ids = list(b['file.id'] for b in syn.chunkedQuery("select id from file where parentId=='%s' and accession_identifier=='%s'" % (TRACKER_ID, args.accession)))
+    if len(ids) != 1:
+        sys.stderr.write('Error finding %s\n' % (args.accession))
+        return 1
+
+    ent = syn.get(ids[0], downloadFile=False)
+    if ent.status[0] not in active_states:
+        sys.stderr.write('Returning inactive work %s (%s)\n' % (args.accession, ent.status[0]))
+        return 1     
+
+    ent.status=state_path[ent.status[0]]
+    syn.store(ent, forceVersion=False)
+    return 0
+
+
+def errorAssignment(args, syn):
+
+    ids = list(b['file.id'] for b in syn.chunkedQuery("select id from file where parentId=='%s' and accession_identifier=='%s'" % (TRACKER_ID, args.accession)))
+    if len(ids) != 1:
+        sys.stderr.write('Error finding %s\n' % (args.accession))
+        return 1
+
+    ent = syn.get(ids[0], downloadFile=False)
+    if ent.status[0] not in active_states:
+        sys.stderr.write('Returning inactive work %s (%s)\n' % (args.accession, ent.status[0]))
+        return 1     
+
+    ent.status[0] = "error:%s" % (ent.status[0])
+    ent.error_message=args.message
+    syn.store(ent, forceVersion=False)
+    return 0
+
+
+def resetStatus(args, syn):
+    if args.status not in state_path:
+        sys.stderr.write('Unknown State: %s\n' % (args.status))
+        return 1
+    results =syn.chunkedQuery("select id from file where parentId=='%s' and accession_identifier=='%s'" % (TRACKER_ID, args.accession))
+    for result in results:
+        ent = syn.get(result['file.id'], downloadFile=False)
+        ent.status=args.status
+        if args.assignee is not None:
+            ent.assignee=args.assignee
+        if args.delete_assignee:
+            ent.assignee = None
+        syn.store(ent, forceVersion=False)
+    return 0
+
+
+def getInfo(args, syn):
+    results = syn.chunkedQuery("select * from file where parentId=='%s' and accession_identifier=='%s'" %(TRACKER_ID, args.accession))
+    for result in results:
+        if args.full:
+            print json.dumps(result, indent=4)
+        elif args.type:
+            print result['file.sample_type_name'][0]
+        elif args.get_normal:
+            donor_identifier = result['file.donor_identifier'][0]
+            res2 = syn.chunkedQuery("select * from file where parentId=='%s' and donor_identifier=='%s'" %(TRACKER_ID, donor_identifier))
+            for a in res2:
+                if a['file.sample_type_name'][0] in ["Blood Derived Normal", "Solid Tissue Normal"]:
+                    print a['file.accession_identifier'][0]
+        else:
+            print result['file.status'][0]
+    return 0
+
+def getAssignments(args, syn):
+    results = syn.chunkedQuery("select * from file where parentId=='%s' and assignee=='%s'" % (TRACKER_ID, args.assignee))
+    for result in results:
+        print "%s\t%s" % (result['file.accession_identifier'][0], result['file.status'][0])
+
+    results = syn.chunkedQuery("select * from file where parentId=='%s' and assignee=='%s'" % (SPLIT_TRACKER_ID, args.assignee))
+    for result in results:
+        print "%s\t%s\t%s" % (result['file.derived_accession'][0], result['file.readgroup'], result['file.status'][0])
+
+    return 0
+
+
+# --------------------- Util functions ----------------------------
+def argsort(seq):
+    # http://stackoverflow.com/questions/3071415/efficient-method-to-calculate-the-rank-vector-of-a-list-in-python
+    return sorted(range(len(seq)), key = seq.__getitem__)
+
+
+def build_parser():
+    """Builds the argument parser and returns the result."""
+    
+    parser = argparse.ArgumentParser(
+            description='Interfaces with the Synapse repository for sample tracking')
+    parser.add_argument('--debug', dest='debug', action='store_true')
+ 
+    subparsers = parser.add_subparsers( title='commands',
+                                        description='The following commands are available:',
+                                        help='For additional help: "synapseICGCMonitor <COMMAND> -h"')
+
+    parser_get = subparsers.add_parser('getBamForWork',
+                                       help='Returns a unaligned un-split TCGA bam file UUID as stored on CGHub')
+    parser_get.add_argument("--count", help="Number of assignments to get", type=int, default=1)
+    parser_get.add_argument("-o", "--out", help="Output, defaults to stdout", default=None)
+    
+    
+    parser_get.add_argument('assignee', metavar='assignee', type=str,
+            help='Center processing file for example UCSC or EBI')
+    parser_get.set_defaults(func=getBamForWork)
+
+    parser_reset = subparsers.add_parser('resetStatus',
+                                       help='Given an UUID accession resets the status')
+    parser_reset.add_argument('accession', metavar='accession', type=str,
+            help='accession identifier to reset the status')
+    parser_reset.add_argument('--assignee', metavar='assignee', type=str, default = None,
+            help='Center processing file for example UCSC or EBI (defaults to original value)')
+    parser_reset.add_argument('--delete-assignee', default = False, action="store_true",
+            help='Center processing file for example UCSC or EBI (defaults to original value)')
+    
+    parser_reset.add_argument('--status', metavar='status', type=str, default = 'unassigned',
+            help='status of file processing {unassigned, downloading, downloaded, splitting, split, aligning, aligned}\n defaults to unassigned')
+    parser_reset.set_defaults(func=resetStatus)
+
+    parser_addFile = subparsers.add_parser('addBamGroups',
+                                           help='Adds the readgroups for a bam file for monitoring and alignment')
+    parser_addFile.add_argument('accession', metavar='accession', type=str,
+                                 help='accession identifier from which files were derived')
+    parser_addFile.add_argument('path', metavar='path', type=str, help='Path of the BAM file')
+    parser_addFile.set_defaults(func=addBamGroups)
+
+    parser_getAssignmentWork = subparsers.add_parser('getAssignmentForWork',
+                                       help='')
+    parser_getAssignmentWork.add_argument('assignee', metavar='assignee', type=str,
+            help='Computer or process id processing the file')
+    parser_getAssignmentWork.add_argument('status', metavar='status', type=str,
+            help='')
+    parser_getAssignmentWork.set_defaults(func=getAssignmentForWork)
+
+    parser_returnAssignment = subparsers.add_parser('returnAssignment', help='')
+    parser_returnAssignment.add_argument('accession', metavar='accession', type=str)
+    parser_returnAssignment.set_defaults(func=returnAssignment)
+
+    parser_errorAssignment = subparsers.add_parser('errorAssignment', help='')
+    parser_errorAssignment.add_argument('accession', metavar='accession', type=str)
+    parser_errorAssignment.add_argument('message', metavar='message', type=str)
+    parser_errorAssignment.set_defaults(func=errorAssignment)
+
+    parser_info = subparsers.add_parser('getInfo',
+                                       help='Info about accession')
+    parser_info.add_argument('accession', metavar='accession', type=str)
+    parser_info.add_argument('--full', action="store_true", default=False)
+    parser_info.add_argument('--type', action="store_true", default=False)
+    parser_info.add_argument('--get-normal', action="store_true", default=False)
+    
+    
+    parser_info.set_defaults(func=getInfo)
+
+    parser_assignments = subparsers.add_parser('getAssignments',
+                                       help='Info about accession')
+    parser_assignments.add_argument('assignee')
+    parser_assignments.set_defaults(func=getAssignments)
+
+    return parser
+
+
+
+if __name__ == "__main__":
+    args = build_parser().parse_args()
+    syn = synapseclient.Synapse(debug=args.debug, skip_checks=True)
+    syn.login(silent=True)
+    if 'func' in args:
+        sys.exit(args.func(args, syn))
+
+
