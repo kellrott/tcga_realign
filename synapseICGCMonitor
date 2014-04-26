@@ -11,6 +11,9 @@ import json
 from synapseclient.exceptions import *
 import itertools
 import collections
+import uuid
+import csv
+
 TRACKER_ID='syn2364746'#'syn2381825' #
 SPLIT_TRACKER_ID = 'syn2381914'
 
@@ -147,7 +150,8 @@ def getAssignmentForWork(args, syn):
         sys.stderr.write('Unknown State: %s\n' % (args.status))
         return 1
 
-    ids = list(syn.chunkedQuery("select id from file where parentId=='%s' and assignee=='%s' and status=='%s'" % (TRACKER_ID, args.assignee, args.status)))
+    res = list(syn.chunkedQuery("select id, fileSize from file where parentId=='%s' and assignee=='%s' and status=='%s'" % (TRACKER_ID, args.assignee, args.status)))
+    ids = list(a['file.id'] for a in sorted(res, key=lambda x:x['file.fileSize']))
     i = 0
     out = sys.stdout
     while True:
@@ -235,6 +239,29 @@ def getInfo(args, syn):
             print result['file.status'][0]
     return 0
 
+
+
+def getReport(args, syn):
+    results = list(syn.chunkedQuery("select * from file where parentId=='%s' and location=='CGHub'" %(TRACKER_ID)))
+
+    cols = {}
+    donors = {}
+    for row in results:
+        d = row['file.donor_identifier'][0]
+        c = row['file.sample_type_name'][0]
+        cols[c] = True
+        if d not in donors:
+            donors[d] = {'donor':d}
+
+        donors[d][c] = "%s:%s(%s)" % (row['file.accession_identifier'][0],row['file.status'][0],row.get('file.assignee',["None"])[0])
+
+    writer = csv.DictWriter(sys.stdout, ['donor'] + cols.keys(), delimiter="\t")
+    writer.writeheader()
+    for d in donors:
+        writer.writerow(donors[d])
+        
+    return 0
+
 def getAssignments(args, syn):
     results = syn.chunkedQuery("select * from file where parentId=='%s' and assignee=='%s'" % (TRACKER_ID, args.assignee))
     for result in results:
@@ -245,6 +272,20 @@ def getAssignments(args, syn):
         print "%s\t%s\t%s" % (result['file.derived_accession'][0], result['file.readgroup'], result['file.status'][0])
 
     return 0
+
+def getResultID(args, syn):
+
+    ids = list(b['file.id'] for b in syn.chunkedQuery("select id from file where parentId=='%s' and accession_identifier=='%s'" % (TRACKER_ID, args.accession)))
+    if len(ids) != 1:
+        sys.stderr.write('Error finding %s\n' % (args.accession))
+        return 1
+
+    ent = syn.get(ids[0], downloadFile=False)
+    if 'result_accession_identifier' not in ent:
+        ent['result_accession_identifier'] = [str(uuid.uuid4())]
+        syn.store(ent, forceVersion=False)
+    return ent['result_accession_identifier'][0]
+
 
 
 # --------------------- Util functions ----------------------------
@@ -317,14 +358,24 @@ def build_parser():
     parser_info.add_argument('--full', action="store_true", default=False)
     parser_info.add_argument('--type', action="store_true", default=False)
     parser_info.add_argument('--get-normal', action="store_true", default=False)
-    
-    
     parser_info.set_defaults(func=getInfo)
 
     parser_assignments = subparsers.add_parser('getAssignments',
                                        help='Info about accession')
     parser_assignments.add_argument('assignee')
     parser_assignments.set_defaults(func=getAssignments)
+
+
+    parser_result_id = subparsers.add_parser('getResultID',
+                                       help='Result ID')
+    parser_result_id.add_argument('accession', metavar='accession', type=str)
+    parser_result_id.set_defaults(func=getResultID)
+
+
+
+    parser_report = subparsers.add_parser('getReport',
+                                       help='Status Report')
+    parser_report.set_defaults(func=getReport)
 
     return parser
 
