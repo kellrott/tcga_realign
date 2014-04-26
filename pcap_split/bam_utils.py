@@ -60,9 +60,9 @@ def lane_level_bam_from_fastq(RG, workdir, logger=default_logger):
 
     return True, bam_filename
 
-def process_rg(analysis_id, rg_dict, header, output_dir, logger=default_logger):
+def process_rg(analysis_id, rg_dict, header, work_dir, output_dir, logger=default_logger):
 
-    valid_bam, lane_level_bam = lane_level_bam_from_fastq(rg_dict, output_dir)
+    valid_bam, lane_level_bam = lane_level_bam_from_fastq(rg_dict, work_dir)
     if not valid_bam:
         return False, None
     
@@ -102,7 +102,7 @@ def gen_unaligned_bam(bam_filename, analysis_id, metadata, specimen_dict, work_d
         for line in rg_file:
             rg_dict = header_utils.get_read_group_info(line)
             header = header_utils.create_header(output_dir, metadata, rg_dict, specimen_dict)
-            r = pool.apply_async(process_rg, (analysis_id, rg_dict, header, work_dir))
+            r = pool.apply_async(process_rg, (analysis_id, rg_dict, header, work_dir, output_dir))
             results.append(r)
 
         rg_file.close()
