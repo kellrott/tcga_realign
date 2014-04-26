@@ -7,9 +7,14 @@ UUID=$2
 
 . $BASEDIR/align.conf
 
-BAM_DIR=$VOLUME/output/$UUID
-BAM_FILE=$(ls $BAM_DIR/*.bam)
 
+BAM_DIR=$VOLUME/output/$UUID
+#the realigned BAM file
+BAM_FILE=$(ls $BAM_DIR/*.bam)
+#the BAM file downloaded from CGHub
+ORIG_FILE=$(ls $VOLUME/input/$UUID/*.bam)
+
+#the submission directory
 SUB_DIR=$VOLUME/submit/$UUID
 
 if [ ! -e $SUB_DIR ]; then
@@ -22,6 +27,8 @@ fi
 if [ ! -e $SUB_DIR/PAWG.$UUID.bam ]; then
 	ln -s $BAM_FILE $SUB_DIR/PAWG.$UUID.bam
 fi
+
+#put metric compareing $ORIG_FILE and $BAM_FILE and save stats to $SUB_DIR
 
 NEW_UUID=`uuidgen`
 

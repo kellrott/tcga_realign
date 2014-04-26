@@ -21,6 +21,7 @@ mkdir $LOCAL
 mkdir $LOCAL/input
 mkdir $LOCAL/splits
 mkdir $LOCAL/output
+mkdir $LOCAL/submit
 
 SYN_MONITOR="$BASEDIR/synapseICGCMonitor"
 
@@ -31,14 +32,14 @@ if [ $? != 0 ]; then
 	exit 1
 fi
 
-$SYN_MONITOR resetStatus --status=splitting $UUID
+$SYN_MONITOR resetStatus --status=splitting $UUID 2> $BASEDIR/logs/$UUID.split.err > $BASEDIR/logs/$UUID.split.out
 $BASEDIR/job_split.sh $LOCAL $UUID
 if [ $? != 0 ]; then
 	$SYN_MONITOR errorAssignment $UUID "Split Failure"
 	exit 1
 fi
 
-$SYN_MONITOR resetStatus --status=aligning $UUID
+$SYN_MONITOR resetStatus --status=aligning $UUID 2> $BASEDIR/logs/$UUID.align.err > $BASEDIR/logs/$UUID.align.out
 $BASEDIR/job_align.sh $LOCAL $UUID
 if [ $? != 0 ]; then
 	$SYN_MONITOR errorAssignment $UUID "Align Failure"
