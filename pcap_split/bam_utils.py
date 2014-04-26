@@ -88,7 +88,7 @@ def gen_unaligned_bam(bam_filename, analysis_id, metadata, specimen_dict, work_d
 
     #create the read group fastqs
     try:
-        cmd = "bamtofastq outputperreadgroup=1 gz=1 level=1 inputbuffersize=2097152000 outputdir=%s T=`mktemp -p %s bamtofastq_XXXXXXXXX` < %s" %(work_dir, work_dir, bam_filename)
+        cmd = "bamtofastq outputperreadgroup=1 gz=1 level=1 inputbuffersize=2097152000 tryoq=1 outputdir=%s T=`mktemp -p %s bamtofastq_XXXXXXXXX` < %s" %(work_dir, work_dir, bam_filename)
         logger.info("Running %s" % cmd)
         subprocess.check_call(cmd, shell=True)
     except:
