@@ -169,8 +169,12 @@ def add_icgc_specific_metadata(xp,root):
     dummy_rg_line = ""
     rg_dict=header_utils.get_read_group_info(dummy_rg_line,logger=default_logger)
     dcc_md = header_utils.parse_cghub_metadata(ANALYSIS_ID, logger=default_logger)
-    #set this for both, if this is a normal bam, this should be passed in as "N/A"
+    (icgc_type, sample_class) = specimen_dict[dcc_md["sample_type"]]
+    #icgc needs to track the accociated Normal BAM's new analyis uuid
     dcc_md['use_cntl']=str(NEW_NORMAL_UUID)
+    #however, if this is a normal bam, this should be passed in as "N/A"
+    if sample_class == 'normal':
+    	dcc_md['use_cntl']="N/A"
     temp_header_file = header_utils.create_header(PATH_TO_BAM, dcc_md, rg_dict, specimen_dict, logger=default_logger)
     #now that we have our fields mapped to the correct ICGC field names, put them into the analysis xml as ANALYSIS_ATTRIBUTES
     attributes=root.find("ANALYSIS/ANALYSIS_ATTRIBUTES")

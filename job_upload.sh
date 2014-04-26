@@ -31,14 +31,15 @@ fi
 #put metric compareing $ORIG_FILE and $BAM_FILE and save stats to $SUB_DIR
 
 NEW_UUID=`uuidgen`
-#NEW_NORMAL_UUID=`uuidgen`
-NEW_NORMAL_UUID="N/A"
+NEW_NORMAL_UUID=`uuidgen`
 
 pushd $SUB_DIR
-#/pod/home/cwilks/pawgpy/bin/python $BASEDIR/cghub_metadata_generator/create_pawg_metadata.py -u $UUID -f PAWG.$UUID.bam -c `cat $BAM_FILE.md5` -p $SUB_DIR -i $BAM_FILE.info -t $NEW_NORMAL_UUID -n $NEW_UUID
 /pod/home/cwilks/pawgpy/bin/python $BASEDIR/cghub_metadata_generator/create_pawg_metadata.py -u $UUID -f PAWG.$UUID.bam -c `cat $BAM_FILE.md5` -p $SUB_DIR -t $NEW_NORMAL_UUID -n $NEW_UUID
 popd
 
 pushd $SUB_DIR
 /pod/home/cwilks/pawgpy/bin/python $BASEDIR/cghub_metadata_generator/cgsubmit --validate-only -u $NEW_UUID
+#for real
+#/pod/home/cwilks/pawgpy/bin/python $BASEDIR/cghub_metadata_generator/cgsubmit -c /pod/home/cwilks/UCSC_PAWG.key -u $NEW_UUID
+/usr/bin/gtupload -c /pod/home/cwilks/UCSC_PAWG.key -u $NEW_UUID/manifest.xml -vv 2>$SUB_DIR/upload.stderr.log
 popd
