@@ -158,7 +158,7 @@ def getAssignmentForWork(args, syn):
         if i==len(ids):
             sys.stderr.write('No more assignments available\n')
             return 1
-        ent = syn.get(ids[i]['file.id'], downloadFile=False)
+        ent = syn.get(ids[i], downloadFile=False)
         if ent.status[0] != args.status: 
             i+=1 
             continue        
