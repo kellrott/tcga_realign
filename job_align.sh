@@ -25,13 +25,14 @@ else
 fi
 
 if [ -z $NO_MERGE ]; then
-	CMD="$CMD_PREFIX $ALIGN -r $REF_SEQ -t $THREADS -o $OUTPUT_BASE/$UUID -s $UUID $BAM_DIR/*.bam -workdir $WORK_DIR"
+	CMD="$CMD_PREFIX $ALIGN -r $REF_SEQ -t $THREADS -o $OUTPUT_BASE/$UUID.partial -s $UUID $BAM_DIR/*.bam -workdir $WORK_DIR"
 	echo Running $CMD
 	$CMD
 else
 	for BAM in $BAM_DIR/*.bam; do
-		CMD="$CMD_PREFIX $ALIGN -r $REF_SEQ -t $THREADS -o $OUTPUT_BASE/$UUID -s `basename $BAM .cleaned.bam` $BAM -workdir $WORK_DIR"
+		CMD="$CMD_PREFIX $ALIGN -r $REF_SEQ -t $THREADS -o $OUTPUT_BASE/$UUID.partial -s `basename $BAM .cleaned.bam` $BAM -workdir $WORK_DIR"
 		echo Running $CMD
 		$CMD
 	done
 fi
+mv $OUTPUT_BASE/$UUID.partial $OUTPUT_BASE/$UUID
