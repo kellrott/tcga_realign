@@ -25,11 +25,12 @@ SAMPLE_TYPE=`$SYN_MONITOR getInfo $UUID --type`
 
 if [[ "$SAMPLE_TYPE" == "Primary Solid Tumor" ]]; then 
 	NORMAL_ID=`$SYN_MONITOR getInfo $UUID --get-normal`
-	CMD="$CMD_PREFIX $SPLIT_CODE --bam_path $BAM_FILE --output_dir $VOLUME/splits/$UUID --work_dir $WORK_DIR/$UUID --tumor_id $UUID --normal_id $NORMAL_ID"
+	CMD="$CMD_PREFIX $SPLIT_CODE --bam_path $BAM_FILE --output_dir $VOLUME/splits/$UUID.partial --work_dir $WORK_DIR/$UUID --tumor_id $UUID --normal_id $NORMAL_ID"
 	echo "Running $CMD"
 	$CMD
 elif [[ "$SAMPLE_TYPE" == "Blood Derived Normal" || "$SAMPLE_TYPE" == "Solid Tissue Normal" ]]; then
-	$CMD_PREFIX $SPLIT_CODE --bam_path $BAM_FILE --output_dir $VOLUME/splits/$UUID --work_dir $WORK_DIR/$UUID --normal_id $UUID
+	$CMD_PREFIX $SPLIT_CODE --bam_path $BAM_FILE --output_dir $VOLUME/splits/$UUID.partial --work_dir $WORK_DIR/$UUID --normal_id $UUID
 else
 	exit 1
 fi
+mv $VOLUME/splits/$UUID.partial $VOLUME/splits/$UUID
