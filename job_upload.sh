@@ -3,6 +3,8 @@
 BASEDIR="$(cd `dirname $0`; pwd)"
 
 PYTHON=/pod/home/cwilks/pawgpy/bin/python
+#common python still needs lxml to work with my stuff
+#PYTHON=/pod/opt/bin/python
 
 VOLUME=$1
 UUID=$2
@@ -41,7 +43,15 @@ fi
 
 
 NEW_NORMAL_UUID=`$PYTHON $BASEDIR/synapseICGCMonitor getInfo $UUID --get-normal`
+if [ $? != 0 ]; then
+	echo "Failed to get new normal uuid from Synapse error"
+	exit 1
+fi
 `$PYTHON $BASEDIR/synapseICGCMonitor getResultID $UUID 2> $SUB_DIR/new_uuid`
+if [ $? != 1 ]; then
+	echo "Failed to get new uuid from Synapse error"
+	exit 1
+fi
 NEW_UUID=`cat $SUB_DIR/new_uuid`
 
 #create cghub validating metadata with ICGC specific metadata added to it
