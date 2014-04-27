@@ -94,7 +94,7 @@ def process_idxstats(sam_output,output_path,do_truncation):
 			mapped=int(f[2])
 			unmapped=int(f[3])
 			
-			if chr == 'N' and do_truncation:
+			if chr == 'W' and do_truncation:
 				TRUNCATE=1
 			if TRUNCATE:
 				mapped=0
