@@ -29,6 +29,7 @@ if [ ! -e $SUB_DIR/PAWG.$UUID.bam ]; then
 fi
 
 #put metric compareing $ORIG_FILE and $BAM_FILE and save stats to $SUB_DIR
+/pod/home/cwilks/pawgpy/bin/python $BASEDIR/cghub_metadata_generator/realigned_bam_check.py -o $ORIG_FILE -n $BAM_FILE -p $SUB_DIR
 
 NEW_UUID=`uuidgen`
 NEW_NORMAL_UUID=`uuidgen`
@@ -41,5 +42,5 @@ pushd $SUB_DIR
 /pod/home/cwilks/pawgpy/bin/python $BASEDIR/cghub_metadata_generator/cgsubmit --validate-only -u $NEW_UUID
 #for real
 #/pod/home/cwilks/pawgpy/bin/python $BASEDIR/cghub_metadata_generator/cgsubmit -c /pod/home/cwilks/UCSC_PAWG.key -u $NEW_UUID
-/usr/bin/gtupload -c /pod/home/cwilks/UCSC_PAWG.key -u $NEW_UUID/manifest.xml -vv 2>$SUB_DIR/upload.stderr.log
+#/usr/bin/gtupload -c /pod/home/cwilks/UCSC_PAWG.key -u $NEW_UUID/manifest.xml -vv 2>$SUB_DIR/upload.stderr.log
 popd

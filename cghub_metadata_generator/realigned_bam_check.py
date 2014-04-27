@@ -16,16 +16,16 @@ from subprocess import Popen
 PEARSON_CORR_MIN=0.99
 
 parser=OptionParser()
-parser.add_option("-o", action="store",type='string',dest="original_bam",help="REQUIRED: filename of BAM to be submitted, must be prefixed with \"PAWG.\"")
-parser.add_option("-n", action="store",type='string',dest="new_bam",help="REQUIRED:")
-#parser.add_option("-p", action="store",type='string',dest="output",help="REQUIRED: output directory")
+parser.add_option("-o", action="store",type='string',dest="original_bam",help="REQUIRED: full path andfilename of original BAM")
+parser.add_option("-n", action="store",type='string',dest="new_bam",help="REQUIRED: full path andfilename of new realigned BAM")
+parser.add_option("-p", action="store",type='string',dest="output",help="REQUIRED: output directory for BAI files")
 
 (options,args) = parser.parse_args()
 ORIGINAL_BAM=options.original_bam
 NEW_BAM=options.new_bam
-#OUTPUT_DIR=options.output
+OUTPUT_DIR=options.output
 
-if NEW_BAM is None or ORIGINAL_BAM is None:
+if NEW_BAM is None or ORIGINAL_BAM is None or OUTPUT_DIR is None:
     sys.stderr.write("MUST submit: the original TCGA source BAM and the re-aligned new BAM\n")
     sys.exit(-1)
 
@@ -71,42 +71,44 @@ def process_flagstat(fs_output):
 			fs_map["%s%s" % (f[3],name_ctr)]=[f[0],f[2]]
 	return fs_map
 
-def run_idxstats(bam_file,do_truncation):
+def run_idxstats(bam_file,output_path,do_truncation):
 	(sam_output,stderr)=run_command("samtools idxstats %s" % bam_file)
-	return process_idxstats(sam_output,do_truncation)
+	return process_idxstats(sam_output,output_path,do_truncation)
 
-def process_idxstats(sam_output,do_truncation):
+def process_idxstats(sam_output,output_path,do_truncation):
 	sam_map={}
 	sam_map["*"]=0
 	total_mapped=0
 	total_unmapped=0
 	total=0
 	TRUNCATE=None
-	for line in sam_output.split("\n"):
-		line=line.rstrip()
-		if len(line) < 1:
-			continue
-		#chr,chr len,mapped,unmapped
-		f=line.split()
-		chr = str(f[0]).upper()
-		mapped=int(f[2])
-		unmapped=int(f[3])
-		
-		if chr == 'N' and do_truncation:
-			TRUNCATE=1
-		if TRUNCATE:
-			mapped=0
-			unmapped=0		
-		#adjust for the missing chromosomes in the original, but present in the newer one, 
-		#add their mapped + unmapped to the unmapped catchall chr="*"
-		if chr == "NC_007605" or chr == "HS37D5" or chr == "*":
-			sam_map["*"]=sam_map["*"]+mapped+unmapped
-		else:
-			sam_map[chr]=mapped+unmapped
+	with open(output_path,"w") as outf:
+		for line in sam_output.split("\n"):
+			outf.write("%s\n" % (line))	
+			line=line.rstrip()
+			if len(line) < 1:
+				continue
+			#chr,chr len,mapped,unmapped
+			f=line.split()
+			chr = str(f[0]).upper()
+			mapped=int(f[2])
+			unmapped=int(f[3])
+			
+			if chr == 'N' and do_truncation:
+				TRUNCATE=1
+			if TRUNCATE:
+				mapped=0
+				unmapped=0		
+			#adjust for the missing chromosomes in the original, but present in the newer one, 
+			#add their mapped + unmapped to the unmapped catchall chr="*"
+			if chr == "NC_007605" or chr == "HS37D5" or chr == "*":
+				sam_map["*"]=sam_map["*"]+mapped+unmapped
+			else:
+				sam_map[chr]=mapped+unmapped
 
-		total_mapped=total_mapped+mapped
-		total_unmapped=total_unmapped+unmapped
-		total=total+mapped+unmapped
+			total_mapped=total_mapped+mapped
+			total_unmapped=total_unmapped+unmapped
+			total=total+mapped+unmapped
 
 	return (total,total_mapped,total_unmapped,sam_map)
 
@@ -142,8 +144,8 @@ def main():
     #orig_fs_map = process_flagstat(fs_output) 
     #(fs_output,stderr)=run_command("cat %s" % NEW_BAM)
     #new_fs_map = process_flagstat(fs_output) 
-    (total1,total_mapped1,total_unmapped1,orig_idxs) = run_idxstats(ORIGINAL_BAM,False)
-    (total2,total_mapped2,total_unmapped2,new_idxs) = run_idxstats(NEW_BAM,False)
+    (total1,total_mapped1,total_unmapped1,orig_idxs) = run_idxstats(ORIGINAL_BAM,"%s/old_bam.idxstats"%(OUTPUT_DIR),False)
+    (total2,total_mapped2,total_unmapped2,new_idxs) = run_idxstats(NEW_BAM,"%s/new_bam.idxstats"%(OUTPUT_DIR),False)
   
     sys.stdout.write("old=%d %d %d\n" % (total1,total_mapped1,total_unmapped1)) 
     sys.stdout.write("new=%d %d %d\n" % (total2,total_mapped2,total_unmapped2)) 
