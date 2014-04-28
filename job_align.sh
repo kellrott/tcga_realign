@@ -29,7 +29,7 @@ if [ -z $NO_MERGE ]; then
 	echo Running $CMD
 	$CMD
 	if [ $? != 0 ]; then
-		echo alignment failure
+		echo $UUID alignment failure
 		exit 1
 	fi
 else
@@ -38,7 +38,7 @@ else
 		echo Running $CMD
 		$CMD
 		if [ $? != 0 ]; then
-			echo alignment failure
+			echo $UUID alignment failure
 			exit 1
 		fi
 	done
