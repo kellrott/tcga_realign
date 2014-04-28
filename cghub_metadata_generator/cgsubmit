@@ -22,6 +22,7 @@ cgsubmit
 
 CGSUBMIT_VERSION = "3.1.1"
 import sys, os
+import re
 myBinDir = os.path.normpath(os.path.dirname(sys.argv[0]))
 sys.path.append(myBinDir + "../lib/python")
 
@@ -1220,7 +1221,8 @@ class CGHubSubmit:
         for metaobj in self.metaobjs:
             metaobj.Parse()
             metaobj.CollectAnalysisInfo(["center_name", "alias"], rootdict)
-            metaobj.CollectFiles(filedict)
+            if re.compile("analysis.xml$",re.I).search(metaobj.xmlfile) != None:
+            	metaobj.CollectFiles(filedict)
 
         #
         # Add the collected root attributes

@@ -9,38 +9,46 @@
 
 #3) finally it replaced the FILES block with the new checksum and filename for the realigned bam file
 
-
-
 import ConfigParser
 from optparse import OptionParser
 import os
 import sys
 import re
-#import CGHWSI
 import lxml.etree as xp
 import datetime
 import subprocess
 from subprocess import Popen
 import uuid
+import logging
+#import UofC's utils for getting CGHub's sample/aliquot level (DCC-sourced) metadata into the ANALYSIS_ATTRIBUTES for ICGC
+import pcap_split
+import header_utils
 import CGHWSI
+
+basedir = os.path.abspath(os.path.dirname( __file__ ))
+default_logger = logging.getLogger(name='cgmdregen')
 
 parser=OptionParser()
 parser.add_option("-u", action="store",type='string',dest="analysis_id",help="REQUIRED: original analysis_id (uuid) of the BAM to be submitted")
 parser.add_option("-c", action="store",type='string',dest="checksum",help="REQUIRED: MD5 checksum of BAM to be submitted")
 parser.add_option("-f", action="store",type='string',dest="filename",help="REQUIRED: filename of BAM to be submitted, must be prefixed with \"PAWG.\"")
 parser.add_option("-p", action="store",type='string',dest="path_to_bam_file",default="./",help="OPTIONAL: path to BAM to be submitted, if not in the analysis_id directory")
-parser.add_option("-i", action="store",type='string',dest="info_file",default=None,help="OPTIONAL: info file to be added to analysis attributes")
-parser.add_option("-n", action="store",type='string',dest="new_uuid",default=None,help="OPTIONAL: new uuid")
+parser.add_option("-t", action="store",type='string',dest="new_normal_uuid",default=None,help="REQUIRED: new analysis uuid for the associated realigned normal (for use_cntl)")
+parser.add_option("-n", action="store",type='string',dest="new_uuid",default=None,help="OPIOTNAL: new analysis uuid of this realigned bam")
+#parser.add_option("-i", action="store",type='string',dest="info_file",default=None,help="OPTIONAL: info file to be added to analysis attributes")
+parser.add_option("-s", action="store",type='string',dest="specimen_file",default=os.path.join(basedir,'../pcap_split/tcga_dcc_specimen_type.txt'),help="OPTIONAL: mapping file between TCGA sample id and ICGC sample name")
 
 (options,args) = parser.parse_args()
 ANALYSIS_ID=options.analysis_id
 CHECKSUM=options.checksum
 FILENAME=options.filename
-INFOFILE=options.info_file
+#INFOFILE=options.info_file
 NEW_UUID=options.new_uuid
+NEW_NORMAL_UUID=options.new_normal_uuid
+SPECIMEN_FILE=options.specimen_file
 
-if ANALYSIS_ID is None or CHECKSUM is None or FILENAME is None:
-    sys.stderr.write("MUST submit: the original TCGA source BAM's analysis_id(uuid), MD5 checksum, and a filename\n")
+if ANALYSIS_ID is None or CHECKSUM is None or FILENAME is None or NEW_NORMAL_UUID is None:
+    sys.stderr.write("MUST submit: the original TCGA source BAM's analysis_id(uuid), MD5 checksum, the associated normal bams new analysis uuid, and a filename\n")
     sys.exit(-1)
 
 PATH_TO_BAM=options.path_to_bam_file
@@ -97,7 +105,7 @@ def extract_pipeline_sections_from_bam_header(filename):
                      
 
 
-def process_analysis_xml(original_uuid,filename,checksum,path,info_file):
+def process_analysis_xml(original_uuid,filename,checksum,path):
     f=filename.split(r'.')
     data_block_name='.'.join(f[:len(f)-1])
 
@@ -122,9 +130,11 @@ def process_analysis_xml(original_uuid,filename,checksum,path,info_file):
     targets = root_new.find('ANALYSIS/TARGETS')
     targets.clear()
     for target in root_orig.iter('TARGET'):
-       targets.append(target) 
+       targets.append(target)  
+    #commented out, only Broad(?) does this, so it will break on other centers' xml
     #identifiers=root_orig.find("ANALYSIS/TARGETS/IDENTIFIERS")
     #targets.append(identifiers) 
+
     #3) update data_block names with filename sans extension
     data_block = root_new.find('ANALYSIS/DATA_BLOCK')
     data_block.set('name',data_block_name)
@@ -142,13 +152,37 @@ def process_analysis_xml(original_uuid,filename,checksum,path,info_file):
        pipeline.append(pipe_section)
     
     #6) (optional) update ICGC specific ANALYSIS_ATTRIBUTES
+    add_icgc_specific_metadata(xp,root_new) 
+    #final: write out new analysis.xml
+    st=xp.tostring(root_new,pretty_print=True)
     
-    attributes=root_new.find("ANALYSIS/ANALYSIS_ATTRIBUTES")
-    if info_file is not None:
-        info_hash = {'original_analysis_id' : str(original_uuid)}
-        with open(info_file) as h:
+    afout=open("./%s/analysis.new.xml" % (original_uuid),"w")
+    afout.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+    afout.write(st+"\n") 
+    afout.close()
+
+def add_icgc_specific_metadata(xp,root): 
+    #get ICGC specific values for specimen (sample) names
+    specimen_dict=pcap_split.parse_specimen_dict(SPECIMEN_FILE)
+    #get header_utils to give us back an rg_dict with empty values, we only care about the keys when we pass it to header_utils.create_header 
+    #will generate a warning in the log file, this is fine
+    dummy_rg_line = ""
+    rg_dict=header_utils.get_read_group_info(dummy_rg_line,logger=default_logger)
+    dcc_md = header_utils.parse_cghub_metadata(ANALYSIS_ID, logger=default_logger)
+    (icgc_type, sample_class) = specimen_dict[dcc_md["sample_type"]]
+    #icgc needs to track the accociated Normal BAM's new analyis uuid
+    dcc_md['use_cntl']=str(NEW_NORMAL_UUID)
+    #however, if this is a normal bam, this should be passed in as "N/A"
+    if sample_class == 'normal':
+    	dcc_md['use_cntl']="N/A"
+    temp_header_file = header_utils.create_header(PATH_TO_BAM, dcc_md, rg_dict, specimen_dict, logger=default_logger)
+    #now that we have our fields mapped to the correct ICGC field names, put them into the analysis xml as ANALYSIS_ATTRIBUTES
+    attributes=root.find("ANALYSIS/ANALYSIS_ATTRIBUTES")
+    if temp_header_file is not None:
+        info_hash = {'original_analysis_id' : str(ANALYSIS_ID)}
+        with open(temp_header_file) as h:
             for line in h:
-                res = re.search(r'^([^:]+):(.*)$', line)
+                res = re.search(r'^@CO\t([^:]+):(.*)$', line)
                 if res:
                     info_hash[res.group(1)] = res.group(2)
         for key, value in info_hash.items():
@@ -158,22 +192,14 @@ def process_analysis_xml(original_uuid,filename,checksum,path,info_file):
             k=xp.SubElement(e,"VALUE")
             k.text=value
             attributes.append(e)
-
-    #final: write out new analysis.xml
-    st=xp.tostring(root_new,pretty_print=True)
-    
-    afout=open("./%s/analysis.new.xml" % (original_uuid),"w")
-    afout.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-    afout.write(st+"\n") 
-    afout.close()
-
+    return attributes
 
 def main():
     sys.stdout.write("Processing uuid: %s\n" % ANALYSIS_ID)
     data=CGHWSI.retrieve_analysis_attributes_for_uuid(ANALYSIS_ID)
     error=CGHWSI.split_analysis_attributes(data,ANALYSIS_ID)
     run_command("rsync -av %s/analysis.xml %s/analysis.xml.orig" % (ANALYSIS_ID,ANALYSIS_ID))
-    process_analysis_xml(ANALYSIS_ID,FILENAME,CHECKSUM,PATH_TO_BAM,INFOFILE)
+    process_analysis_xml(ANALYSIS_ID,FILENAME,CHECKSUM,PATH_TO_BAM)
     run_command("cat %s/analysis.new.xml | egrep -v -e '<!--' > %s/analysis.xml" % (ANALYSIS_ID,ANALYSIS_ID))
     if os.path.exists( os.path.join(ANALYSIS_ID,FILENAME) ):
         os.unlink( os.path.join(ANALYSIS_ID,FILENAME) )
@@ -188,7 +214,7 @@ def main():
     run_command("rsync -av ./%s/*.xml ./%s/" % (ANALYSIS_ID,nuuid))
     run_command("ln -s %s/%s %s/" % (PATH_TO_BAM,FILENAME,nuuid))
     outf = open("./%s/trans.map"%(ANALYSIS_ID),"w")
-    outf.write("%s\t%s"%(ANALYSIS_ID,nuuid))
+    outf.write("%s\t%s\t%s\n"%(ANALYSIS_ID,nuuid,NEW_NORMAL_UUID))
     outf.close()
 
 if __name__ == '__main__':
