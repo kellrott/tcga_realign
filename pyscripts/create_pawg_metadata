@@ -26,7 +26,7 @@ import header_utils
 import CGHWSI
 
 basedir = os.path.abspath(os.path.dirname( __file__ ))
-default_logger = logging.getLogger(name='cgmdregen')
+default_logger = logging.getLogger(name='creaet_pawg_metadata')
 
 parser=OptionParser()
 parser.add_option("-u", action="store",type='string',dest="analysis_id",help="REQUIRED: original analysis_id (uuid) of the BAM to be submitted")
@@ -36,7 +36,7 @@ parser.add_option("-p", action="store",type='string',dest="path_to_bam_file",def
 parser.add_option("-t", action="store",type='string',dest="new_normal_uuid",default=None,help="REQUIRED: new analysis uuid for the associated realigned normal (for use_cntl)")
 parser.add_option("-n", action="store",type='string',dest="new_uuid",default=None,help="OPIOTNAL: new analysis uuid of this realigned bam")
 #parser.add_option("-i", action="store",type='string',dest="info_file",default=None,help="OPTIONAL: info file to be added to analysis attributes")
-parser.add_option("-s", action="store",type='string',dest="specimen_file",default=os.path.join(basedir,'../pcap_split/tcga_dcc_specimen_type.txt'),help="OPTIONAL: mapping file between TCGA sample id and ICGC sample name")
+parser.add_option("-s", action="store",type='string',dest="specimen_file",default=os.path.join(basedir,'tcga_dcc_specimen_type.txt'),help="OPTIONAL: mapping file between TCGA sample id and ICGC sample name")
 
 (options,args) = parser.parse_args()
 ANALYSIS_ID=options.analysis_id
