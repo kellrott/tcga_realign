@@ -72,8 +72,8 @@ if [ ! -e $LOCAL/submits/$UUID ]; then
 		rm $LOCAL.pid
 		exit 1
 	fi
+	$SYN_MONITOR resetStatus --status=uploaded $UUID
+	#rm -rf $LOCAL
 fi
 
-#rsync -av $LOCAL/output/$UUID $VOLUME/output/
-#rm -rf $LOCAL
 rm $LOCAL.pid

@@ -2,9 +2,6 @@
 
 BASEDIR="$(cd `dirname $0`; pwd)"
 
-PYTHON=/pod/home/cwilks/pawgpy/bin/python
-#common python still needs lxml to work with my stuff
-#PYTHON=/pod/opt/bin/python
 
 VOLUME=$1
 UUID=$2
@@ -39,15 +36,21 @@ if [ $? != 0 ]; then
 	exit 1
 fi
 
-#NEW_UUID=`uuidgen`
 
+NORMAL_UUID=`$PYTHON $BASEDIR/synapseICGCMonitor getInfo $UUID --get-normal`
+if [ $? != 0 ]; then
+	echo "Failed to get normal uuid from Synapse error"
+	exit 1
+fi
 
-NEW_NORMAL_UUID=`$PYTHON $BASEDIR/synapseICGCMonitor getInfo $UUID --get-normal`
+NEW_NORMAL_UUID=`$PYTHON $BASEDIR/synapseICGCMonitor getResultID $NORMAL_UUID --get-normal`
 if [ $? != 0 ]; then
 	echo "Failed to get new normal uuid from Synapse error"
 	exit 1
 fi
-`$PYTHON $BASEDIR/synapseICGCMonitor getResultID $UUID 2> $SUB_DIR/new_uuid`
+
+
+$PYTHON $BASEDIR/synapseICGCMonitor getResultID $UUID > $SUB_DIR/new_uuid
 if [ $? != 1 ]; then
 	echo "Failed to get new uuid from Synapse error"
 	exit 1
@@ -66,16 +69,21 @@ popd
 #submit to cghub (or just validate)
 pushd $SUB_DIR
 $PYTHON $BASEDIR/cghub_metadata_generator/cgsubmit --validate-only -u $NEW_UUID
+if [ $? != 0 ]; then
+	echo "CGHub metadata validation error"
+	exit 1
+fi
+
 #uncomment to run for real, changes CGHub production!
-#$PYTHON $BASEDIR/cghub_metadata_generator/cgsubmit -c /pod/home/cwilks/UCSC_PAWG.key -u $NEW_UUID
-#if [ $? != 0 ]; then
-#	echo "CGHub metadata submission error"
-#	exit 1
-#fi
+$PYTHON $BASEDIR/cghub_metadata_generator/cgsubmit -c $UPLOAD_KEY -u $NEW_UUID
+if [ $? != 0 ]; then
+	echo "CGHub metadata submission error"
+	exit 1
+fi
 #upload data to cghub
-#/usr/bin/gtupload -c /pod/home/cwilks/UCSC_PAWG.key -u $NEW_UUID/manifest.xml -vv 2>$SUB_DIR/upload.stderr.log
-#if [ $? != 0 ]; then
-#	echo "CGHub file upload error, check error log $SUB_DIR/upload.stderr.log"
-#	exit 1
-#fi
+gtupload -c $UPLOAD_KEY -u $NEW_UUID/manifest.xml -vv 2>$SUB_DIR/upload.stderr.log
+if [ $? != 0 ]; then
+	echo "CGHub file upload error, check error log $SUB_DIR/upload.stderr.log"
+	exit 1
+fi
 popd
