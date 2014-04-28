@@ -62,6 +62,18 @@ if [ ! -e $LOCAL/outputs/$UUID ]; then
 	fi
 fi
 
-rsync -av $LOCAL/output/$UUID $VOLUME/output/
-rm -rf $LOCAL
+#now do checking, submitting, and uploading
+if [ ! -e $LOCAL/submits/$UUID ]; then
+	echo Submitting
+	$SYN_MONITOR resetStatus --status=submitting $UUID
+	$BASEDIR/job_upload.sh $LOCAL $UUID 2> $BASEDIR/logs/$UUID.submit.err > $BASEDIR/logs/$UUID.submit.out
+	if [ $? != 0 ]; then
+		$SYN_MONITOR errorAssignment $UUID "Submit Failure"
+		rm $LOCAL.pid
+		exit 1
+	fi
+fi
+
+#rsync -av $LOCAL/output/$UUID $VOLUME/output/
+#rm -rf $LOCAL
 rm $LOCAL.pid
