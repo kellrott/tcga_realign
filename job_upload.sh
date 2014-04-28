@@ -66,24 +66,24 @@ popd
 
 #submit to cghub (or just validate)
 pushd $SUB_DIR
-$PYTHON $BASEDIR/pyscripts/cgsubmit --validate-only -u $NEW_UUID
-if [ $? != 0 ]; then
-	echo "CGHub metadata validation error"
-	exit 1
-fi
+#$PYTHON $BASEDIR/pyscripts/cgsubmit --validate-only -u $NEW_UUID
+#if [ $? != 0 ]; then
+#	echo "CGHub metadata validation error"
+#	exit 1
+#fi
 
 #uncomment to run for real, changes CGHub production!
-#$PYTHON $BASEDIR/pyscripts/cgsubmit -c $UPLOAD_KEY -u $NEW_UUID
-#if [ $? != 0 ]; then
-#	echo "CGHub metadata submission error"
-#	exit 1
-#fi
+$PYTHON $BASEDIR/pyscripts/cgsubmit -c $UPLOAD_KEY -u $NEW_UUID
+if [ $? != 0 ]; then
+	echo "CGHub metadata submission error"
+	exit 1
+fi
 #upload data to cghub
-#gtupload -c $UPLOAD_KEY -u $NEW_UUID/manifest.xml -vv 2>$SUB_DIR/upload.stderr.log
-#if [ $? != 0 ]; then
-#	echo "CGHub file upload error, check error log $SUB_DIR/upload.stderr.log"
-#	exit 1
-#fi
+gtupload -c $UPLOAD_KEY -u $NEW_UUID/manifest.xml -vv 2>$SUB_DIR/upload.stderr.log
+if [ $? != 0 ]; then
+	echo "CGHub file upload error, check error log $SUB_DIR/upload.stderr.log"
+	exit 1
+fi
 popd
 
 mv $SUB_DIR $FIN_DIR
