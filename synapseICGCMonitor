@@ -227,17 +227,21 @@ def getInfo(args, syn):
     for result in results:
         if args.full:
             print json.dumps(result, indent=4)
+            return 0
         elif args.type:
             print result['file.sample_type_name'][0]
+            return 0
         elif args.get_normal:
             donor_identifier = result['file.donor_identifier'][0]
             res2 = syn.chunkedQuery("select * from file where parentId=='%s' and donor_identifier=='%s'" %(TRACKER_ID, donor_identifier))
             for a in res2:
                 if a['file.sample_type_name'][0] in ["Blood Derived Normal", "Solid Tissue Normal"]:
                     print a['file.accession_identifier'][0]
+                    return 0
         else:
             print result['file.status'][0]
-    return 0
+            return 0
+    return 1
 
 
 
@@ -284,7 +288,8 @@ def getResultID(args, syn):
     if 'result_accession_identifier' not in ent:
         ent['result_accession_identifier'] = [str(uuid.uuid4())]
         syn.store(ent, forceVersion=False)
-    return ent['result_accession_identifier'][0]
+    print ent['result_accession_identifier'][0]
+    return 0
 
 
 
