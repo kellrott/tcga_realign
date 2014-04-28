@@ -28,11 +28,19 @@ if [ -z $NO_MERGE ]; then
 	CMD="$CMD_PREFIX $ALIGN -r $REF_SEQ -t $THREADS -o $OUTPUT_BASE/$UUID.partial -s $UUID $BAM_DIR/*.bam -workdir $WORK_DIR"
 	echo Running $CMD
 	$CMD
+	if [ $? != 0 ]; then
+		echo alignment failure
+		exit 1
+	fi
 else
 	for BAM in $BAM_DIR/*.bam; do
 		CMD="$CMD_PREFIX $ALIGN -r $REF_SEQ -t $THREADS -o $OUTPUT_BASE/$UUID.partial -s `basename $BAM .cleaned.bam` $BAM -workdir $WORK_DIR"
 		echo Running $CMD
 		$CMD
+		if [ $? != 0 ]; then
+			echo alignment failure
+			exit 1
+		fi
 	done
 fi
 mv $OUTPUT_BASE/$UUID.partial $OUTPUT_BASE/$UUID

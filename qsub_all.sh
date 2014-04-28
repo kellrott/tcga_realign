@@ -10,7 +10,8 @@ VOLUME=$1
 UUID=`./find_local_job.sh`
 
 if [ -z "$UUID" ]; then 
+	echo "Exiting with no work on " `hostname`
 	exit 0
 fi
-
+echo Running $UUID on `hostname`
 ./job_all.sh $VOLUME $UUID
