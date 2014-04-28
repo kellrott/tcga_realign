@@ -16,7 +16,8 @@ BAM_FILE=$(ls $BAM_DIR/*.bam)
 ORIG_FILE=$(ls $VOLUME/input/$UUID/*.bam)
 
 #the submission directory
-SUB_DIR=$VOLUME/submit/$UUID
+SUB_DIR=$VOLUME/submit/$UUID.partial
+FIN_DIR=$VOLUME/submit/$UUID
 
 if [ ! -e $SUB_DIR ]; then
 	mkdir $SUB_DIR
@@ -87,3 +88,5 @@ if [ $? != 0 ]; then
 	exit 1
 fi
 popd
+
+mv $SUB_DIR $FIN_DIR

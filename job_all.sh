@@ -17,13 +17,11 @@ fi
 
 LOCAL=$WORK_DIR/tcga_realign_$UUID
 
-if [ ! -e $LOCAL ]; then
-	mkdir $LOCAL
-	mkdir $LOCAL/input
-	mkdir $LOCAL/splits
-	mkdir $LOCAL/output
-	mkdir $LOCAL/submit
-fi
+for a in $LOCAL $LOCAL/input $LOCAL/splits $LOCAL/output $LOCAL/submit; do 
+	if [ ! -e $a ]; then
+		mkdir $a
+	fi
+done
 
 echo $$ > $LOCAL.pid
 
@@ -63,7 +61,7 @@ if [ ! -e $LOCAL/outputs/$UUID ]; then
 fi
 
 #now do checking, submitting, and uploading
-if [ ! -e $LOCAL/submits/$UUID ]; then
+if [ ! -e $LOCAL/submit/$UUID ]; then
 	echo Submitting
 	$SYN_MONITOR resetStatus --status=submitting $UUID
 	$BASEDIR/job_upload.sh $LOCAL $UUID 2> $BASEDIR/logs/$UUID.submit.err > $BASEDIR/logs/$UUID.submit.out
