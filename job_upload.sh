@@ -2,6 +2,9 @@
 
 BASEDIR="$(cd `dirname $0`; pwd)"
 
+#PYTHON=/pod/opt/bin/python
+UPLOAD_KEY=/pod/home/cwilks/UCSC_PAWG.key
+PYTHON=python
 
 VOLUME=$1
 UUID=$2
@@ -9,7 +12,7 @@ UUID=$2
 . $BASEDIR/align.conf
 
 
-BAM_DIR=$VOLUME/output/$UUID
+BAM_DIR=$VOLUME/output/$UUID.partial
 #the realigned BAM file
 BAM_FILE=$(ls $BAM_DIR/*.bam)
 #the BAM file downloaded from CGHub
@@ -44,14 +47,15 @@ if [ $? != 0 ]; then
 	exit 1
 fi
 
-NEW_NORMAL_UUID=`$PYTHON $BASEDIR/synapseICGCMonitor getResultID $NORMAL_UUID --get-normal`
-if [ $? != 0 ]; then
+$PYTHON $BASEDIR/synapseICGCMonitor getResultID $NORMAL_UUID 2> $SUB_DIR/new_normal_uuid
+if [ $? != 1 ]; then
 	echo "Failed to get new normal uuid from Synapse error"
 	exit 1
 fi
+NEW_NORMAL_UUID=`cat $SUB_DIR/new_normal_uuid`
 
 
-$PYTHON $BASEDIR/synapseICGCMonitor getResultID $UUID > $SUB_DIR/new_uuid
+$PYTHON $BASEDIR/synapseICGCMonitor getResultID $UUID 2> $SUB_DIR/new_uuid
 if [ $? != 1 ]; then
 	echo "Failed to get new uuid from Synapse error"
 	exit 1
@@ -69,11 +73,11 @@ popd
 
 #submit to cghub (or just validate)
 pushd $SUB_DIR
-$PYTHON $BASEDIR/cghub_metadata_generator/cgsubmit --validate-only -u $NEW_UUID
-if [ $? != 0 ]; then
-	echo "CGHub metadata validation error"
-	exit 1
-fi
+#$PYTHON $BASEDIR/cghub_metadata_generator/cgsubmit --validate-only -u $NEW_UUID
+#if [ $? != 0 ]; then
+#	echo "CGHub metadata validation error"
+#	exit 1
+#fi
 
 #uncomment to run for real, changes CGHub production!
 $PYTHON $BASEDIR/cghub_metadata_generator/cgsubmit -c $UPLOAD_KEY -u $NEW_UUID
