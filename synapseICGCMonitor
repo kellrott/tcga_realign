@@ -27,7 +27,8 @@ state_path = {
     'split' : 'aligning',
     'aligning' : 'aligned',
     'aligned' : 'uploading',
-    'uploading' : 'uploaded'
+    'uploading' : 'uploaded',
+    'uploaded' : 'uploaded'
 }
 
 active_states = [
