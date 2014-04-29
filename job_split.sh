@@ -4,7 +4,7 @@ BASEDIR="$(cd `dirname $0`; pwd)"
 
 . $BASEDIR/align.conf
 
-SPLIT_CODE="$BASEDIR/pcap_split/pcap_split.py"
+SPLIT_CODE="$BASEDIR/pyscripts/pcap_split.py"
 SYN_MONITOR="$BASEDIR/synapseICGCMonitor"
 
 VOLUME=$1
