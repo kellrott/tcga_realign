@@ -24,6 +24,7 @@ for a in $LOCAL $LOCAL/input $LOCAL/splits $LOCAL/output $LOCAL/submit; do
 done
 
 echo $$ > $LOCAL.pid
+hostname > $BASEDIR/logs/$UUID.host
 
 SYN_MONITOR="$BASEDIR/synapseICGCMonitor"
 
