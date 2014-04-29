@@ -2,7 +2,6 @@
 
 BASEDIR="$(cd `dirname $0`; pwd)"
 
-
 VOLUME=$1
 UUID=$2
 
@@ -31,7 +30,7 @@ if [ ! -e $SUB_DIR/PAWG.$UUID.bam ]; then
 fi
 
 #put metric compareing $ORIG_FILE and $BAM_FILE and save stats to $SUB_DIR
-$PYTHON $BASEDIR/cghub_metadata_generator/realigned_bam_check -o $ORIG_FILE -n $BAM_FILE -p $SUB_DIR
+$PYTHON $BASEDIR/pyscripts/realigned_bam_check -o $ORIG_FILE -n $BAM_FILE -p $SUB_DIR
 if [ $? != 0 ]; then
 	echo "Realignment Check error"
 	exit 1
@@ -44,23 +43,21 @@ if [ $? != 0 ]; then
 	exit 1
 fi
 
-NEW_NORMAL_UUID=`$PYTHON $BASEDIR/synapseICGCMonitor getResultID $NORMAL_UUID --get-normal`
+NEW_NORMAL_UUID=`$PYTHON $BASEDIR/synapseICGCMonitor getResultID $NORMAL_UUID`
 if [ $? != 0 ]; then
 	echo "Failed to get new normal uuid from Synapse error"
 	exit 1
 fi
 
-
-$PYTHON $BASEDIR/synapseICGCMonitor getResultID $UUID > $SUB_DIR/new_uuid
-if [ $? != 1 ]; then
+NEW_UUID=`$PYTHON $BASEDIR/synapseICGCMonitor getResultID $UUID`
+if [ $? != 0 ]; then
 	echo "Failed to get new uuid from Synapse error"
 	exit 1
 fi
-NEW_UUID=`cat $SUB_DIR/new_uuid`
 
 #create cghub validating metadata with ICGC specific metadata added to it
 pushd $SUB_DIR
-$PYTHON $BASEDIR/cghub_metadata_generator/create_pawg_metadata -u $UUID -f PAWG.$UUID.bam -c `cat $BAM_FILE.md5` -p $SUB_DIR -t $NEW_NORMAL_UUID -n $NEW_UUID 
+$PYTHON $BASEDIR/pyscripts/create_pawg_metadata -u $UUID -f PAWG.$UUID.bam -c `cat $BAM_FILE.md5` -p $SUB_DIR -t $NEW_NORMAL_UUID -n $NEW_UUID 
 if [ $? != 0 ]; then
 	echo "CGHub metadata creation error"
 	exit 1
@@ -69,14 +66,14 @@ popd
 
 #submit to cghub (or just validate)
 pushd $SUB_DIR
-$PYTHON $BASEDIR/cghub_metadata_generator/cgsubmit --validate-only -u $NEW_UUID
-if [ $? != 0 ]; then
-	echo "CGHub metadata validation error"
-	exit 1
-fi
+#$PYTHON $BASEDIR/pyscripts/cgsubmit --validate-only -u $NEW_UUID
+#if [ $? != 0 ]; then
+#	echo "CGHub metadata validation error"
+#	exit 1
+#fi
 
 #uncomment to run for real, changes CGHub production!
-$PYTHON $BASEDIR/cghub_metadata_generator/cgsubmit -c $UPLOAD_KEY -u $NEW_UUID
+$PYTHON $BASEDIR/pyscripts/cgsubmit -c $UPLOAD_KEY -u $NEW_UUID
 if [ $? != 0 ]; then
 	echo "CGHub metadata submission error"
 	exit 1
