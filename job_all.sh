@@ -17,6 +17,9 @@ fi
 
 LOCAL=$WORK_DIR/tcga_realign_$UUID
 
+#from now on, WORK_DIR is LOCAL
+export WORK_DIR=$LOCAL
+
 for a in $LOCAL $LOCAL/input $LOCAL/splits $LOCAL/output $LOCAL/submit; do 
 	if [ ! -e $a ]; then
 		mkdir $a
