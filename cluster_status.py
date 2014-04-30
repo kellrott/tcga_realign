@@ -83,7 +83,7 @@ if __name__ == "__main__":
 		for i in getRemoteList(m, "submit"):
 			if len(i) and not i.endswith(".partial"):
 				name = os.path.basename(i)
-				output_list.append( name )
+				submit_list.append( name )
 				if name in input_list:
 					input_list.remove(name)
 				if name in split_list:
@@ -91,7 +91,7 @@ if __name__ == "__main__":
 				if name in output_list:
 					output_list.remove(name)					
 	
-		for i in input_list + split_list + output_list:
+		for i in input_list + split_list + output_list + submit_list:
 			job_location[i] = dict(job_location.get(i, {}), **{m:None})
 		
 		#print m, input_list, split_list, output_list
@@ -103,7 +103,7 @@ if __name__ == "__main__":
 
 		for i in output_list:
 			job_state[i] = dict(job_state.get(i,{}), aligned=True)
-			
+		
 		for i in submit_list:
 			job_state[i] = dict(job_state.get(i,{}), submitted=True)
 
