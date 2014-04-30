@@ -5,8 +5,8 @@ BASEDIR="$(cd `dirname $0`; pwd)"
 
 SYN_MONITOR="$BASEDIR/synapseICGCMonitor"
 
-if [ -e $WORK_DIR/tcga_realign_* ]; then
-	for a in $WORK_DIR/tcga_realign_*; do
+if [ $(ls -d $WORK_DIR/tcga_realign_* | wc -l) > 0 ]; then
+	for a in `ls -d $WORK_DIR/tcga_realign_* | grep -v '.pid$'`; do
 		if [ ! -e $a.pid ]; then
 			basename $a | sed 's/^tcga_realign_//'
 			exit 0
