@@ -26,7 +26,11 @@ for a in $LOCAL $LOCAL/input $LOCAL/splits $LOCAL/output $LOCAL/submit; do
 	fi
 done
 
-echo $$ > $LOCAL.pid
+mkdir $LOCAL.pid
+if [ $? != 0 ]; then
+	echo "Failed to get PID"
+fi
+echo $$ > $LOCAL.pid/pid
 hostname > $BASEDIR/logs/$UUID.host
 
 SYN_MONITOR="$BASEDIR/synapseICGCMonitor"
@@ -37,7 +41,7 @@ if [ ! -e $LOCAL/input/$UUID ]; then
 	$BASEDIR/job_download.sh $LOCAL $UUID  2> $BASEDIR/logs/$UUID.download.err > $BASEDIR/logs/$UUID.download.out
 	if [ $? != 0 ]; then
 		$SYN_MONITOR errorAssignment $UUID "File not found"
-		rm $LOCAL.pid
+		rm -rf $LOCAL.pid
 		exit 1
 	fi
 fi
@@ -48,18 +52,18 @@ if [ ! -e $LOCAL/splits/$UUID ]; then
 	$BASEDIR/job_split.sh $LOCAL $UUID 2> $BASEDIR/logs/$UUID.split.err > $BASEDIR/logs/$UUID.split.out
 	if [ $? != 0 ]; then
 		$SYN_MONITOR errorAssignment $UUID "Split Failure"
-		rm $LOCAL.pid
+		rm -rf $LOCAL.pid
 		exit 1
 	fi
 fi
 
-if [ ! -e $LOCAL/outputs/$UUID ]; then
+if [ ! -e $LOCAL/output/$UUID ]; then
 	echo Aligning
 	$SYN_MONITOR resetStatus --status=aligning $UUID
 	$BASEDIR/job_align.sh $LOCAL $UUID 2> $BASEDIR/logs/$UUID.align.err > $BASEDIR/logs/$UUID.align.out
 	if [ $? != 0 ]; then
 		$SYN_MONITOR errorAssignment $UUID "Align Failure"
-		rm $LOCAL.pid
+		rm -rf $LOCAL.pid
 		exit 1
 	fi
 fi
@@ -71,11 +75,11 @@ if [ ! -e $LOCAL/submit/$UUID ]; then
 	$BASEDIR/job_upload.sh $LOCAL $UUID 2> $BASEDIR/logs/$UUID.submit.err > $BASEDIR/logs/$UUID.submit.out
 	if [ $? != 0 ]; then
 		$SYN_MONITOR errorAssignment $UUID "Submit Failure"
-		rm $LOCAL.pid
+		rm -rf $LOCAL.pid
 		exit 1
 	fi
 	$SYN_MONITOR resetStatus --status=uploaded $UUID
 	#rm -rf $LOCAL
 fi
 
-rm $LOCAL.pid
+rm -rf $LOCAL.pid
