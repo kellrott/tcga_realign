@@ -257,10 +257,13 @@ def getReport(args, syn):
         cols[c] = True
         if d not in donors:
             donors[d] = {'donor':d}
-        donors[d]['size'] = donors[d].get('size', 0) + row.get('file.fileSize',[0])[0]
-        donors[d][c] = "%s:%s(%s)" % (row['file.accession_identifier'][0],row['file.status'][0],row.get('file.assignee',["None"])[0])
+        donors[d]['size'] = donors[d].get('size', 0) + int(row.get('file.fileSize',[0])[0])
+        donors[d]['count'] = donors[d].get('count', 0) + 1
 
-    writer = csv.DictWriter(sys.stdout, ['donor', 'size'] + cols.keys(), delimiter="\t")
+        donors[d][c] = "%s:%s(%s)" % (row['file.accession_identifier'][0],row['file.status'][0],row.get('file.assignee',["None"])[0])
+    
+
+    writer = csv.DictWriter(sys.stdout, ['donor', 'count', 'size'] + cols.keys(), delimiter="\t")
     writer.writeheader()
     for d in donors:
         writer.writerow(donors[d])

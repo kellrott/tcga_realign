@@ -17,6 +17,13 @@ fi
 
 LOCAL=$WORK_DIR/tcga_realign_$UUID
 
+mkdir $LOCAL.pid
+if [ $? != 0 ]; then
+	echo "Failed to get PID"
+fi
+echo $$ > $LOCAL.pid/pid
+hostname > $BASEDIR/logs/$UUID.host
+
 #from now on, WORK_DIR is LOCAL
 export WORK_DIR=$LOCAL
 
@@ -25,13 +32,6 @@ for a in $LOCAL $LOCAL/input $LOCAL/splits $LOCAL/output $LOCAL/submit; do
 		mkdir $a
 	fi
 done
-
-mkdir $LOCAL.pid
-if [ $? != 0 ]; then
-	echo "Failed to get PID"
-fi
-echo $$ > $LOCAL.pid/pid
-hostname > $BASEDIR/logs/$UUID.host
 
 SYN_MONITOR="$BASEDIR/synapseICGCMonitor"
 
@@ -42,6 +42,7 @@ if [ ! -e $LOCAL/input/$UUID ]; then
 	if [ $? != 0 ]; then
 		$SYN_MONITOR errorAssignment $UUID "File not found"
 		rm -rf $LOCAL.pid
+		touch $LOCAL.error
 		exit 1
 	fi
 fi
@@ -53,6 +54,7 @@ if [ ! -e $LOCAL/splits/$UUID ]; then
 	if [ $? != 0 ]; then
 		$SYN_MONITOR errorAssignment $UUID "Split Failure"
 		rm -rf $LOCAL.pid
+		touch $LOCAL.error
 		exit 1
 	fi
 fi
@@ -64,6 +66,7 @@ if [ ! -e $LOCAL/output/$UUID ]; then
 	if [ $? != 0 ]; then
 		$SYN_MONITOR errorAssignment $UUID "Align Failure"
 		rm -rf $LOCAL.pid
+		touch $LOCAL.error
 		exit 1
 	fi
 fi
@@ -76,9 +79,11 @@ if [ ! -e $LOCAL/submit/$UUID ]; then
 	if [ $? != 0 ]; then
 		$SYN_MONITOR errorAssignment $UUID "Submit Failure"
 		rm -rf $LOCAL.pid
+		touch $LOCAL.error
 		exit 1
 	fi
 	$SYN_MONITOR resetStatus --status=uploaded $UUID
+	touch $LOCAL.complete
 	#rm -rf $LOCAL
 fi
 
