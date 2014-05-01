@@ -44,8 +44,53 @@ def getBamForWork(args, syn):
     Queries the list of remaining unassigned samples orderd by
     fileSize and tries to change status of to splitting of largest.  If successfull it returns the highest 
     """
-    ids = getOrderedListOfUnassigned(syn)
+    #This query selects any unassigned file
+    query = ("select accession_identifier, donor_identifier, fileSize, notIllumina, assignee from file "
+             "where parentId=='%s' and location=='CGHub' and status=='unassigned'" %TRACKER_ID)
+    ids = getOrderedListOfBams(syn, query)
     sys.stderr.write('%i Unprocessed TCGA Samples\n' %len(ids))
+    #prep variables for common output routine
+    args.status = 'unassigned'
+    return updateAndOutput(args, ids, syn)
+    
+
+def getAssignmentForWork(args, syn):
+    if args.status not in state_path:
+        sys.stderr.write('Unknown State: %s\n' % (args.status))
+        return 1
+
+    #Determine which donors are already uploaded and prioritize these
+    uploadedDonors = {l['file.donor_identifier'][0] for l in 
+                      syn.chunkedQuery("select donor_identifier from file where parentId=='%s' and assignee=='%s' and status=='%s'" 
+                                       % (TRACKER_ID, args.assignee, 'uploaded'))}
+    if args.debug:
+        print uploadedDonors, len(uploadedDonors)
+
+    #Extract information to sort by
+    results = list(syn.chunkedQuery("select id, donor_identifier, fileSize from file where parentId=='%s' and assignee=='%s' and status=='%s'" % (TRACKER_ID, args.assignee, args.status)))
+    ids = [r['file.id'] for r in results]
+    donor_ids = [r['file.donor_identifier'][0] for r in results]
+    file_sizes = [r['file.fileSize'][0] for r in results]
+
+    #Resort by weather the pair has been uploaded
+    notInUploaded = [d not in uploadedDonors for d in donor_ids]
+    idx = argsort(notInUploaded)
+    ids = [ids[i] for i in idx]
+    donor_ids = [donor_ids[i] for i in idx]
+    file_sizes = [file_sizes[i] for i in idx]
+
+    if args.debug:
+        for i in zip(ids, donor_ids, file_sizes):
+            print '\t'.join(map(str,i)), i[1] in uploadedDonors
+
+    #prep variables for common output routine
+    args.count=1
+    args.out=None
+    return updateAndOutput(args, ids, syn)
+
+
+def updateAndOutput(args, ids, syn):
+    """Returns list of ids based on previous ordering and tries to update Synapse Entities. """
     i = 0 
     j = 0
     out = sys.stdout if args.out is None else open(args.out, "w")
@@ -56,33 +101,40 @@ def getBamForWork(args, syn):
             sys.stderr.write('No more samples available\n')
             return 1
         ent = syn.get(ids[i], downloadFile=False)
-        if ent.status[0] !='unassigned': 
+        if ent.status[0] !=args.status: 
             i+=1 
             continue
         ent.assignee = args.assignee
-        ent.status = state_path['unassigned']  #Sets state to todownload
+        ent.status = state_path[args.status]  #Sets state to next stage
         try:
-            syn.store(ent, forceVersion=False)
+            if not args.debug:
+                syn.store(ent, forceVersion=False)
+            else:
+                i+=1 #simulate that it worked to claim
             out.write("%s\n" % ent.accession_identifier[0])
             j+=1
         except SynapseHTTPError:
             i+=1
     out.close()
-    return 0
     
 
-def getOrderedListOfUnassigned(syn):
+def getOrderedListOfBams(syn, query):
     """Performs a query and filters out donors with more than two files
     and return a list of ids inversly sorted by fileSize.
     """
-    QUERY= "select accession_identifier, donor_identifier, fileSize, notIllumina from file where parentId=='%s' and location=='CGHub' and status=='unassigned'" %TRACKER_ID
-    results = list(syn.chunkedQuery(QUERY))
+    results = list(syn.chunkedQuery(query))
 
     #Determine the donor ids of the samples with two files
+    #Later we will skip all those who don't have exactly 2 samples
     donors = syn.chunkedQuery("select donor_identifier from file where parentId=='%s' and location=='CGHub'" %TRACKER_ID)
     donorCounts = collections.Counter([result['file.donor_identifier'][0] for result in donors])
     donors = [donor for donor, count in donorCounts.iteritems() if count==2]
 
+    #Determine previously assigned donors to this assignee
+    assignedDonors = {l['file.donor_identifier'][0] for l in 
+                      syn.chunkedQuery("select donor_identifier from file where parentId=='%s' and location=='CGHub' and assignee=='%s'" 
+                                       %(TRACKER_ID, args.assignee))}
+    
     #Go through query result and remove rows not in donor list and notillumina==True
     fileSizes=list()
     accessions=list()
@@ -95,21 +147,48 @@ def getOrderedListOfUnassigned(syn):
             ids.append(result['file.id'])
             donor_ids.append(result['file.donor_identifier'][0])
 
-    #If there are unassigned partner samples put those in the beginning
-    counts = collections.Counter(donor_ids) 
-    counts = [counts[id] for id in donor_ids]  #Number of unassigned donor ids in list
-    
+
+    #Used to put unassigned partner samples in the beginning 
+    #false if matching tumor/normal already assigned true if not
+    counts = [d not in assignedDonors for d in donor_ids]
+
+    #Compute the fileSizes to be combined sizes of tumor/normal
+    idx = argsort(donor_ids)
+    combinedFileSizes=[0,]*len(fileSizes)
+    i=0
+    while i<len(idx):
+        #The next donor is the same 
+        if donor_ids[idx[i]] == donor_ids[idx[i+1]]:
+            combinedFileSizes[idx[i]] = combinedFileSizes[idx[i+1]]= fileSizes[idx[i]]+fileSizes[idx[i+1]]
+            i+=2
+        else: #Only a single donor found
+            combinedFileSizes[idx[i]] = fileSizes[idx[i]]
+            i+=1
+
+    #This stuff would be trivial with numpy!
     #Sort by fileSize
-    idx = argsort(fileSizes)    
-    ids = [ids[i] for i in idx[::-1]]
-    counts = [counts[i] for i in idx[::-1]]
-    fileSizes = [fileSizes[i] for i in idx[::-1]]
+    idx = argsort(combinedFileSizes)    
+    ids = [ids[i] for i in idx]
+    counts = [counts[i] for i in idx]
+    fileSizes = [fileSizes[i] for i in idx]
+    combinedFileSizes = [combinedFileSizes[i] for i in idx]
+    accessions = [accessions[i] for i in idx]
+    donor_ids = [donor_ids[i] for i in idx]
 
     #Resort by counts
     idx = argsort(counts)    
     ids = [ids[i] for i in idx]
     counts = [counts[i] for i in idx]
     fileSizes = [fileSizes[i] for i in idx]
+    combinedFileSizes = [combinedFileSizes[i] for i in idx]
+    accessions = [accessions[i] for i in idx]
+    donor_ids = [donor_ids[i] for i in idx]
+    
+    ##### DEBUG - TODO - REMOVE
+    if args.debug:
+        for i in range(len(fileSizes)):
+            print '\t'.join(map(str, [donor_ids[i], counts[i], combinedFileSizes[i], fileSizes[i], ids[i]]))
+    #############################
 
     return ids
     
@@ -140,37 +219,12 @@ def addBamGroups(args, syn):
                 file.readgroup_line = line
                 file.derived_accession = args.accession
                 #file.assignee = None
-                syn.store(file, used = [id])
+                if not args.debug:   
+                   syn.store(file, used = [id])
             else:
                 raise Exception('Readgroup already stored')
     return 0
 
-
-def getAssignmentForWork(args, syn):
-    if args.status not in state_path:
-        sys.stderr.write('Unknown State: %s\n' % (args.status))
-        return 1
-
-    res = list(syn.chunkedQuery("select id, fileSize from file where parentId=='%s' and assignee=='%s' and status=='%s'" % (TRACKER_ID, args.assignee, args.status)))
-    ids = list(a['file.id'] for a in sorted(res, key=lambda x:x['file.fileSize']))
-    i = 0
-    out = sys.stdout
-    while True:
-        if i==len(ids):
-            sys.stderr.write('No more assignments available\n')
-            return 1
-        ent = syn.get(ids[i], downloadFile=False)
-        if ent.status[0] != args.status: 
-            i+=1 
-            continue        
-        ent.status = state_path[args.status]
-        try:
-            syn.store(ent, forceVersion=False)
-            out.write("%s\n" % ent.accession_identifier[0])
-            break
-        except SynapseHTTPError:
-            i+=1
-    return 0
 
 def returnAssignment(args, syn):
     
@@ -185,7 +239,8 @@ def returnAssignment(args, syn):
         return 1     
 
     ent.status=state_path[ent.status[0]]
-    syn.store(ent, forceVersion=False)
+    if not args.debug:
+        syn.store(ent, forceVersion=False)
     return 0
 
 
@@ -203,7 +258,8 @@ def errorAssignment(args, syn):
 
     ent.status[0] = "error:%s" % (ent.status[0])
     ent.error_message=args.message
-    syn.store(ent, forceVersion=False)
+    if not args.debug:
+        syn.store(ent, forceVersion=False)
     return 0
 
 
@@ -219,7 +275,8 @@ def resetStatus(args, syn):
             ent.assignee=args.assignee
         if args.delete_assignee:
             ent.assignee = None
-        syn.store(ent, forceVersion=False)
+        if not args.debug:
+            syn.store(ent, forceVersion=False)
     return 0
 
 
@@ -257,13 +314,10 @@ def getReport(args, syn):
         cols[c] = True
         if d not in donors:
             donors[d] = {'donor':d}
-        donors[d]['size'] = donors[d].get('size', 0) + int(row.get('file.fileSize',[0])[0])
-        donors[d]['count'] = donors[d].get('count', 0) + 1
 
         donors[d][c] = "%s:%s(%s)" % (row['file.accession_identifier'][0],row['file.status'][0],row.get('file.assignee',["None"])[0])
-    
 
-    writer = csv.DictWriter(sys.stdout, ['donor', 'count', 'size'] + cols.keys(), delimiter="\t")
+    writer = csv.DictWriter(sys.stdout, ['donor'] + cols.keys(), delimiter="\t")
     writer.writeheader()
     for d in donors:
         writer.writerow(donors[d])
@@ -291,7 +345,8 @@ def getResultID(args, syn):
     ent = syn.get(ids[0], downloadFile=False)
     if 'result_accession_identifier' not in ent:
         ent['result_accession_identifier'] = [str(uuid.uuid4())]
-        syn.store(ent, forceVersion=False)
+        if not args.debug:
+            syn.store(ent, forceVersion=False)
     print ent['result_accession_identifier'][0]
     return 0
 
