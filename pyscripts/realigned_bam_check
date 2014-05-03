@@ -14,6 +14,8 @@ import math
 from subprocess import Popen
 
 PEARSON_CORR_MIN=0.99
+#if the number of alignments *in the new file* is lower than the old, allow a fuzz up to  and includingthis %
+MAX_READ_COUNT_PERCENT_DIFF=0.05
 
 parser=OptionParser()
 parser.add_option("-o", action="store",type='string',dest="original_bam",help="REQUIRED: full path andfilename of original BAM")
@@ -102,11 +104,14 @@ def process_idxstats(sam_output,output_path,do_truncation):
 			mapped=int(f[2])
 			unmapped=int(f[3])
 			
-			if chr == 'W' and do_truncation:
-				TRUNCATE=1
+			#for testing purposes only	
+			#if do_truncation and chr == '22':
+			#	TRUNCATE=1
 			if TRUNCATE:
+				#mapped = mapped-(mapped/20)
+				#unmapped = unmapped+(unmapped/19)
 				mapped=0
-				unmapped=0
+				#unmapped=0
 			TRUNCATE=None
 			#first check, make sure we have mapping reads on all chrs
 			if str(chr) in chrs or chr_patt.search(chr) != None:
@@ -160,9 +165,15 @@ def main():
     #new_fs_map = process_flagstat(fs_output) 
     (total1,total_mapped1,total_unmapped1,orig_idxs) = run_idxstats(ORIGINAL_BAM,"%s/old_bam.idxstats"%(OUTPUT_DIR),False)
     (total2,total_mapped2,total_unmapped2,new_idxs) = run_idxstats(NEW_BAM,"%s/new_bam.idxstats"%(OUTPUT_DIR),False)
-  
+    
+    #diff = total1-total2
+    #do the diff counts check on mapped reads   
+    diff = total_mapped1-total_mapped2
+    percent = (float(diff)/float(total1))
+	 	
     sys.stdout.write("old=%d %d %d\n" % (total1,total_mapped1,total_unmapped1)) 
     sys.stdout.write("new=%d %d %d\n" % (total2,total_mapped2,total_unmapped2)) 
+    sys.stdout.write("diff mapped=%d %s\n" % (diff,str(percent))) 
 
     all_counts1=[]
     all_counts2=[]
@@ -178,6 +189,10 @@ def main():
 
     pearson_corr_coef=pearson_corr(all_counts1,all_counts2)
     sys.stdout.write("pearson=%s\n" % (str(pearson_corr_coef)))
+
+    if diff > 0 and percent > MAX_READ_COUNT_PERCENT_DIFF:
+	sys.stderr.write("ERROR: mapped read counts are less in new alignment (%d), and by more than %d%%: %s%%\n" % (diff,int(100*MAX_READ_COUNT_PERCENT_DIFF),str(100*percent)))
+	sys.exit(-1)			
     if pearson_corr_coef < PEARSON_CORR_MIN:
 	sys.stderr.write("ERROR: Pearson Correlation Coefficient too low: %s < %s\n" % (str(pearson_corr_coef),str(PEARSON_CORR_MIN)))
 	sys.exit(-1)			
