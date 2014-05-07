@@ -23,7 +23,7 @@ BAM_FILE=$(ls $INDIR/$UUID/*.bam)
 
 SAMPLE_TYPE=`$SYN_MONITOR getInfo $UUID --type`
 echo $UUID is $SAMPLE_TYPE
-if [[ "$SAMPLE_TYPE" == "Primary Solid Tumor" || "$SAMPLE_TYPE" == "Metastatic" ]]; then 
+if [[ "$SAMPLE_TYPE" == "Primary Solid Tumor" || "$SAMPLE_TYPE" == "Metastatic" || "$SAMPLE_TYPE" == "Primary Blood Derived Cancer - Peripheral Blood" ]]; then 
 	NORMAL_ID=`$SYN_MONITOR getInfo $UUID --get-normal`
 	CMD="$CMD_PREFIX $SPLIT_CODE --bam_path $BAM_FILE --output_dir $VOLUME/splits/$UUID.partial --work_dir $WORK_DIR/$UUID --tumor_id $UUID --normal_id $NORMAL_ID"
 	echo "Running $CMD"

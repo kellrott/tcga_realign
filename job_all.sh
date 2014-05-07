@@ -83,8 +83,8 @@ if [ ! -e $LOCAL/submit/$UUID ]; then
 		exit 1
 	fi
 	$SYN_MONITOR resetStatus --status=uploaded $UUID
-	touch $LOCAL.complete
-	#rm -rf $LOCAL
+	#touch $LOCAL.complete
+	rm -rf $LOCAL
 fi
 
 rm -rf $LOCAL.pid
