@@ -13,6 +13,6 @@ for row in reader:
 			'endpoint' : row['Normal GNOS endpoint'],
 			'normal_id' : row['Normal Analysis ID'],
 			'tumor_id' : row['Tumour Analysis ID'],
-			'keyfile' : "~/hasuler.key"
+			'keyfile' : "~/haussl_cghub.key"
 		}
 	)
