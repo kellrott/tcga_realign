@@ -40,20 +40,25 @@ def run_pipeline(args):
     if params is None:
         return
 
+    #make sure the base working directory exists
     if not os.path.exists(args.workdir):
         os.mkdir(args.workdir)
 
-    if not os.path.exists(args.outdir):
-        os.mkdir(args.outdir)
-
+    #make sure the working directory for this job exists
     iddir = os.path.join(args.workdir, args.id)
     if not os.path.exists(iddir):
         os.mkdir(iddir)
 
+    #make sure the base output directory exists
+    if not os.path.exists(args.outdir):
+        os.mkdir(args.outdir)
+
+    #make sure the output directory for this job exists
     final_iddir = os.path.join(args.outdir, args.id)
     if not os.path.exists(final_iddir):
         os.mkdir(final_iddir)
 
+    #record the job run info
     run_info = {
         'host' : socket.gethostname(),
         'workdir' : iddir,
@@ -61,51 +66,56 @@ def run_pipeline(args):
     }    
     with open(final_iddir + ".json", "w") as handle:
         handle.write(json.dumps(run_info))
-
+    #create the pid file
     with open(final_iddir + ".pid", "w") as handle:
         handle.write(str(os.getpid()))
 
+    #start scanning across the modules
     modules = get_modules(args)
     for m in modules:
         name = os.path.basename(m).replace(".py", "")
 
+        #get the names of the working directory and the final output directory
         workdir = os.path.abspath(os.path.join(args.workdir,args.id, name))
         finaldir = os.path.abspath(os.path.join(args.outdir,args.id, name))
 
+        #load the module code
         logging.info("Checking for %s run for %s" % (args.id, name))
         f, m_name, desc = imp.find_module(name, [os.path.dirname(m)])
         mod = imp.load_module(name, f, m_name, desc)
 
+        #check for existing results
         if not os.path.exists(finaldir) and not os.path.exists(workdir):
             logging.info("Results for %s run for %s not found" % (args.id, name))
 
-            if mod.RESUME:
-                params['outdir'] = workdir + ".partial"
-                if not os.path.exists(params['outdir']):
-                    os.mkdir(params['outdir'])
-            else:
-                params['outdir'] = tempfile.mkdtemp(dir=iddir, prefix=name)
-
             files = []
-            odir = os.getcwd()
-            orig_stdout = sys.stdout
-            orig_stderr = sys.stderr
-            sys.stdout = open(finaldir + ".stdout", "w")
-            sys.stderr = open(finaldir + ".stderr", "w")
             try:
-                os.chdir(params['outdir'])
-                for func in mod.STEPS:
-                    for fname, f in func(params):
-                        files.append((fname,f))
+                with open(workdir + ".params", "w") as handle:
+                    handle.write(json.dumps(params))
+                if args.docker and hasattr(mod, "IMAGE"):
+                    cmd = "sudo docker run -i --rm \
+-v %s:/pipeline/work \
+-v %s:/pipeline/output \
+-v %s:/pipeline/simple \
+-v %s:/pipeline/code \
+%s \
+/pipeline/simple/simpleflow.py exec /pipeline/code --workdir /pipeline/work --outdir /pipeline/output %s %s %s" % (
+                        os.path.abspath(args.workdir), 
+                        os.path.abspath(args.outdir),
+                        os.path.dirname(os.path.abspath(__file__)),
+                        os.path.abspath(args.pipeline),
+                        mod.IMAGE,
+                        args.id, name, 
+                        os.path.join("/pipeline/work/", args.id, name + ".params")
+                    )
+                else:
+                    cmd = "%s exec %s/params" % (__file__, workdir)
+                logging.info("Running: %s" % (cmd))
+                subprocess.check_call(cmd, shell=True)
             except:
-                with open(finaldir + ".error", "w") as err_handle:
-                    traceback.print_exc(file=err_handle)
                 if not hasattr(mod, "FAIL") or mod.FAIL != 'soft':
                     os.unlink(final_iddir + ".pid")
                     return 1
-            sys.stderr = orig_stderr
-            sys.stdout = orig_stdout
-            os.chdir(odir)
 
             if mod.STORE:
                 shutil.move(params['outdir'], finaldir)
@@ -241,6 +251,54 @@ def run_build(args):
             cmd = "sudo docker build -t %s %s" % (image_name, image_dir)
         subprocess.check_call(cmd, shell=True)
 
+def run_exec(args):
+    logging.info("Starting Exec")
+    #get the names of the working directory and the final output directory
+    workdir = os.path.abspath(os.path.join(args.workdir,args.id, args.module_name))
+    finaldir = os.path.abspath(os.path.join(args.outdir,args.id, args.module_name))
+
+    with open(args.params) as handle:
+        txt = handle.read()
+        params = json.loads(txt)
+
+    odir = os.getcwd()
+    orig_stdout = sys.stdout
+    orig_stderr = sys.stderr
+    sys.stdout = open(finaldir + ".stdout", "w")
+    sys.stderr = open(finaldir + ".stderr", "w")
+
+    modules = get_modules(args)
+    for m in modules:
+        name = os.path.basename(m).replace(".py", "")
+        if name == args.module_name:
+            #load the module code
+            logging.info("Checking for %s run for %s" % (args.id, name))
+            f, m_name, desc = imp.find_module(name, [os.path.dirname(m)])
+            mod = imp.load_module(name, f, m_name, desc)
+
+            if mod.RESUME:
+                params['outdir'] = workdir + ".partial"
+                if not os.path.exists(params['outdir']):
+                    os.mkdir(params['outdir'])
+            else:
+                params['outdir'] = tempfile.mkdtemp(dir=iddir, prefix=name)
+
+
+            os.chdir(params['outdir'])
+            try:
+                for func in mod.STEPS:
+                    for fname, f in func(params):
+                        files.append((fname,f))
+            except:
+                with open(finaldir + ".error", "w") as err_handle:
+                    traceback.print_exc(file=err_handle)
+                    return 1
+            
+    sys.stderr = orig_stderr
+    sys.stdout = orig_stdout
+    os.chdir(odir)
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -250,6 +308,8 @@ if __name__ == "__main__":
     parser_run.add_argument("--workdir", default="work")
     parser_run.add_argument("--outdir", default="out")
     parser_run.add_argument("--ncpus", default="8")
+    parser_run.add_argument("--docker", action="store_true", default=False)
+    
     parser_run.add_argument("pipeline")
     parser_run.add_argument("workfile")
     parser_run.add_argument("id")
@@ -294,6 +354,16 @@ if __name__ == "__main__":
     parser_build.add_argument("-f", "--flush", action="store_true", default=False)
     parser_build.set_defaults(func=run_build)
 
+    parser_exec = subparsers.add_parser('exec')
+    parser_exec.add_argument("pipeline")
+    parser_exec.add_argument("id")
+    parser_exec.add_argument("module_name")
+    parser_exec.add_argument("params")
+    parser_exec.add_argument("--workdir", default="work")
+    parser_exec.add_argument("--outdir", default="out")
+    parser_exec.add_argument("--ncpus", default="8")
+    parser_exec.set_defaults(func=run_exec)
+    
     
     args = parser.parse_args()
     sys.exit(args.func(args))
