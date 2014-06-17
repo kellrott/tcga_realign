@@ -12,3 +12,4 @@ def copy_out(params):
 STEPS = [copy_out]
 RESUME=False
 STORE=True
+IMAGE="base"

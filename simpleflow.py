@@ -226,6 +226,22 @@ def run_resume(args):
         print cmd
         subprocess.check_call(cmd, shell=True)
 
+def run_build(args):
+
+    if args.image is None:
+        images = glob(os.path.join(args.dir, "*"))
+    else:
+        images = [ os.path.join(args.dir, args.image) ]
+
+    for image_dir in images:
+        image_name = os.path.basename(image_dir)
+        if args.flush:
+            cmd = "sudo docker build --no-cache -t %s %s" % (image_name, image_dir)
+        else:
+            cmd = "sudo docker build -t %s %s" % (image_name, image_dir)
+        subprocess.check_call(cmd, shell=True)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(title="subcommand")
@@ -271,7 +287,13 @@ if __name__ == "__main__":
     parser_resume.add_argument("id")
     parser_resume.add_argument("--outdir", default="out")
     parser_resume.set_defaults(func=run_resume)
-    
+
+    parser_build = subparsers.add_parser('build')
+    parser_build.add_argument("--dir", default="images")
+    parser_build.add_argument("--image", default=None)
+    parser_build.add_argument("-f", "--flush", action="store_true", default=False)
+    parser_build.set_defaults(func=run_build)
+
     
     args = parser.parse_args()
     sys.exit(args.func(args))
