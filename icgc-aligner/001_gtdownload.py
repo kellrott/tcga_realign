@@ -26,3 +26,4 @@ def gtdownload(params):
 STEPS=[gtdownload]
 RESUME=True
 STORE=False
+IMAGE="gtdownload"
