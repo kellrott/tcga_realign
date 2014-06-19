@@ -7,7 +7,7 @@ RUN apt-get install -y software-properties-common
 #
 # Install general system tools
 #
-RUN apt-get install -y zip curl git
+RUN apt-get install -y zip curl git python
 
 #
 # Install Oracle Java 7

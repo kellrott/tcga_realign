@@ -93,13 +93,14 @@ def run_pipeline(args):
                 with open(workdir + ".params", "w") as handle:
                     handle.write(json.dumps(params))
                 if args.docker and hasattr(mod, "IMAGE"):
-                    cmd = "sudo docker run -i --rm \
+                    cmd = "sudo docker run -i --rm -u %s \
 -v %s:/pipeline/work \
 -v %s:/pipeline/output \
 -v %s:/pipeline/simple \
 -v %s:/pipeline/code \
 %s \
 /pipeline/simple/simpleflow.py exec /pipeline/code --workdir /pipeline/work --outdir /pipeline/output %s %s %s" % (
+                        os.geteuid(),
                         os.path.abspath(args.workdir), 
                         os.path.abspath(args.outdir),
                         os.path.dirname(os.path.abspath(__file__)),
@@ -116,13 +117,6 @@ def run_pipeline(args):
                 if not hasattr(mod, "FAIL") or mod.FAIL != 'soft':
                     os.unlink(final_iddir + ".pid")
                     return 1
-
-            if mod.STORE:
-                shutil.move(params['outdir'], finaldir)
-            else:
-                shutil.move(params['outdir'], workdir)
-            with open(os.path.join(args.outdir, args.id, name + ".output"), "w") as handle:
-                handle.write(json.dumps(files))
 
         else:
             if os.path.exists( finaldir + ".error" ):
@@ -283,7 +277,7 @@ def run_exec(args):
             else:
                 params['outdir'] = tempfile.mkdtemp(dir=iddir, prefix=name)
 
-
+            files = []
             os.chdir(params['outdir'])
             try:
                 for func in mod.STEPS:
@@ -293,6 +287,14 @@ def run_exec(args):
                 with open(finaldir + ".error", "w") as err_handle:
                     traceback.print_exc(file=err_handle)
                     return 1
+            
+            if mod.STORE:
+                shutil.move(params['outdir'], finaldir)
+            else:
+                shutil.move(params['outdir'], workdir)
+            with open(os.path.join(args.outdir, args.id, name + ".output"), "w") as handle:
+                handle.write(json.dumps(files))
+
             
     sys.stderr = orig_stderr
     sys.stdout = orig_stdout
