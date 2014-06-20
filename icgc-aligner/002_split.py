@@ -24,4 +24,4 @@ def do_tumor_split(params):
 STEPS=[do_normal_split, do_tumor_split]
 RESUME=False
 STORE=False
-IMAGE="icgc-aligner"
+IMAGE="pcap_tools"

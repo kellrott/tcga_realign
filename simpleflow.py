@@ -40,6 +40,8 @@ def run_pipeline(args):
     if params is None:
         return
 
+    params_merge = {}
+
     #make sure the base working directory exists
     if not os.path.exists(args.workdir):
         os.mkdir(args.workdir)
@@ -91,13 +93,17 @@ def run_pipeline(args):
             files = []
             try:
                 with open(workdir + ".params", "w") as handle:
-                    handle.write(json.dumps(params))
+                    handle.write(json.dumps({"base" : params, "merge" : params_merge}))
                 if args.docker and hasattr(mod, "IMAGE"):
+                    data_mount = ""
+                    if args.data is not None:
+                        data_mount = " ".join( "-v %s" % (a) for a in args.data)
                     cmd = "sudo docker run -i --rm -u %s \
 -v %s:/pipeline/work \
 -v %s:/pipeline/output \
 -v %s:/pipeline/simple \
 -v %s:/pipeline/code \
+%s \
 %s \
 /pipeline/simple/simpleflow.py exec /pipeline/code --workdir /pipeline/work --outdir /pipeline/output %s %s %s" % (
                         os.geteuid(),
@@ -105,6 +111,7 @@ def run_pipeline(args):
                         os.path.abspath(args.outdir),
                         os.path.dirname(os.path.abspath(__file__)),
                         os.path.abspath(args.pipeline),
+                        data_mount,
                         mod.IMAGE,
                         args.id, name, 
                         os.path.join("/pipeline/work/", args.id, name + ".params")
@@ -128,13 +135,12 @@ def run_pipeline(args):
         with open(os.path.join(args.outdir, args.id, name + ".output")) as handle:
             txt = handle.read()
             data = json.loads(txt)
+            params_merge[name] = {}
             for row in data:
-                if mod.STORE:
-                    params[row[0]] = os.path.join(finaldir, row[1])
-                else:
-                    params[row[0]] = os.path.join(workdir, row[1])
-
-        print params
+                params_merge[name][row[0]] = row[1]
+                
+                
+        print params, params_merge
     os.unlink(final_iddir + ".pid")
 
 def run_list(args):    
@@ -248,34 +254,37 @@ def run_build(args):
 def run_exec(args):
     logging.info("Starting Exec")
     #get the names of the working directory and the final output directory
-    workdir = os.path.abspath(os.path.join(args.workdir,args.id, args.module_name))
-    finaldir = os.path.abspath(os.path.join(args.outdir,args.id, args.module_name))
+    workbasedir = os.path.abspath(os.path.join(args.workdir,args.id))
 
     with open(args.params) as handle:
         txt = handle.read()
-        params = json.loads(txt)
-
-    odir = os.getcwd()
-    orig_stdout = sys.stdout
-    orig_stderr = sys.stderr
-    sys.stdout = open(finaldir + ".stdout", "w")
-    sys.stderr = open(finaldir + ".stderr", "w")
-
+        params_all = json.loads(txt)
+        
+    params = params_all['base']
+    params_merge = params_all['merge']
+    
     modules = get_modules(args)
     for m in modules:
         name = os.path.basename(m).replace(".py", "")
+        logging.info("loading %s" % (name))
+        f, m_name, desc = imp.find_module(name, [os.path.dirname(m)])
+        mod = imp.load_module(name, f, m_name, desc)
+        workdir = os.path.abspath(os.path.join(args.workdir,args.id, name))
+        finaldir = os.path.abspath(os.path.join(args.outdir,args.id, name))
+
         if name == args.module_name:
             #load the module code
-            logging.info("Checking for %s run for %s" % (args.id, name))
-            f, m_name, desc = imp.find_module(name, [os.path.dirname(m)])
-            mod = imp.load_module(name, f, m_name, desc)
-
+            odir = os.getcwd()
+            orig_stdout = sys.stdout
+            orig_stderr = sys.stderr
+            sys.stdout = open(finaldir + ".stdout", "w")
+            sys.stderr = open(finaldir + ".stderr", "w")
             if mod.RESUME:
                 params['outdir'] = workdir + ".partial"
                 if not os.path.exists(params['outdir']):
                     os.mkdir(params['outdir'])
             else:
-                params['outdir'] = tempfile.mkdtemp(dir=iddir, prefix=name)
+                params['outdir'] = tempfile.mkdtemp(dir=workbasedir, prefix=name)
 
             files = []
             os.chdir(params['outdir'])
@@ -287,6 +296,10 @@ def run_exec(args):
                 with open(finaldir + ".error", "w") as err_handle:
                     traceback.print_exc(file=err_handle)
                     return 1
+
+            sys.stderr = orig_stderr
+            sys.stdout = orig_stdout
+            os.chdir(odir)
             
             if mod.STORE:
                 shutil.move(params['outdir'], finaldir)
@@ -295,10 +308,19 @@ def run_exec(args):
             with open(os.path.join(args.outdir, args.id, name + ".output"), "w") as handle:
                 handle.write(json.dumps(files))
 
+
+        else:
+            if name in params_merge:
+                for ename, evalue in params_merge[name].items():
+                    if isinstance(evalue, basestring): 
+                        if mod.STORE:
+                            params[ename] = os.path.join(finaldir, evalue)
+                        else:
+                            params[ename] = os.path.join(workdir, evalue)
+                    else:
+                            params[ename] = evalue
+
             
-    sys.stderr = orig_stderr
-    sys.stdout = orig_stdout
-    os.chdir(odir)
 
 
 
@@ -310,6 +332,7 @@ if __name__ == "__main__":
     parser_run.add_argument("--workdir", default="work")
     parser_run.add_argument("--outdir", default="out")
     parser_run.add_argument("--ncpus", default="8")
+    parser_run.add_argument("--data", action="append")
     parser_run.add_argument("--docker", action="store_true", default=False)
     
     parser_run.add_argument("pipeline")
