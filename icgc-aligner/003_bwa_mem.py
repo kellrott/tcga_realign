@@ -7,30 +7,38 @@ from glob import glob
 import os
 
 class Aligner:
-	def __init__(self, input_name):
+	def __init__(self, input_name, mode):
 		self.input_name = input_name
+		self.mode = mode
 
-	def run(params):
-		cmd = "bwa mem -p -T 0 -R '%s' %s %s | \
-bamsort inputformat=sam level=1 inputthreads=2 outputthreads=2 calmdnm=1 calmdnmrecompindetonly=1 calmdnmreference=%s tmpfile=out_%s.sorttmp O=out_%s.bam" % (
-			params[self.input_name + ":header"], 
-			params['reference_file'], 
-			params[self.input_name + ":input_file"], 
-			params[self.input_name + ":input_file"],
-			self.input_name, 
-			self.input_name
-)
+	def run(self, params):
+		input_path = params[self.input_name + ":file"]
+		output_path =  os.path.join(self.mode, "out_%s.bam" % (self.input_name))
+		cmd = "/opt/pyscripts/bwa_mem.py -r %s -i %s -o %s" % (
+			params['refseq'],
+			input_path, 
+			output_path			
+		)
+		print "calling", cmd
 		subprocess.check_call(cmd, shell=True)
-		yield (self.input_name + ":aligned_bam", "out_%s.bam" % (self.input_name))
+		yield (self.input_name + ":aligned_bam", output_path)
 
 
 def bwa_steps(params):
-	for rg in params['read_groups']:
-		o = Aligner(rg)
+	if not os.path.exists("tumor"):
+		os.mkdir("tumor")
+	for rg in params['unaligned_tumor_bams']:
+		o = Aligner(rg, "tumor")
+		yield o.run
+	
+	if not os.path.exists("normal"):
+		os.mkdir("normal")	
+	for rg in params['unaligned_normal_bams']:
+		o = Aligner(rg, "normal")
 		yield o.run
 
 
 STEPS=bwa_steps
 RESUME=False
 STORE=False
-IMAGE="icgc-aligner"
+IMAGE="pcap_tools"

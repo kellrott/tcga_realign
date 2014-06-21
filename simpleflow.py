@@ -289,9 +289,14 @@ def run_exec(args):
             files = []
             os.chdir(params['outdir'])
             try:
-                for func in mod.STEPS:
-                    for fname, f in func(params):
-                        files.append((fname,f))
+                if callable(mod.STEPS):
+                    for func in mod.STEPS(params):
+                        for fname, f in func(params):
+                            files.append((fname,f))                    
+                else:
+                    for func in mod.STEPS:
+                        for fname, f in func(params):
+                            files.append((fname,f))
             except:
                 with open(finaldir + ".error", "w") as err_handle:
                     traceback.print_exc(file=err_handle)
