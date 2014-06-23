@@ -1,34 +1,39 @@
 
+import sys
 import subprocess
+from subprocess import CalledProcessError
+from subprocess import Popen
 import string
 from glob import glob
 import os
+	
+#just for initial debug, these will be filled in by the conf read
+PYTHON="/pod/opt/bin/python"
+SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_new/pyscripts"
+PERL = "/pod/home/kellrott/opt/perl/bin/perl"
+#UPLOAD_KEY = "/pod/home/cwilks/UCSC_PAWG.key"
+UPLOAD_KEY = "/pod/home/cwilks/JOSH_PAWG_stage.key"
 
 def run_command(command=str):
     print "Running: %s" % (command)
     run=Popen(["-c",command],stdout=subprocess.PIPE,stderr=subprocess.PIPE,shell=True)
     (stdout,stderr)=run.communicate()
     if run.returncode != 0:
-        for line in stderr:
+        for line in stderr.split("\n"):
             print "ERROR:\t"+line.rstrip()
         #sys.exit(-1)
-	raise subrocess.CalledProcessError(run.returncode,stderr)
+	raise CalledProcessError(run.returncode,stderr)
     return (stdout,stderr)
 
 def cghub_submit(params):
-	#just for initial debug, these will be filled in by the conf read
-	PYTHON="/pod/opt/bin/python"
-	SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_merged/pyscripts"
-	PERL = "/usr/local/bin/perl"
-	UPLOAD_KEY = "/pod/home/cwilks/UCSC_PAWG.key"
-
 	VOLUME=params['volume']
 	UUID=params['UUID']
 	#the realigned BAM file
 	BAM_FILE=params['BAM_FILE']
 	#the BAM file downloaded from CGHub
 	ORIG_FILE=params['ORIG_BAM_FILE']	
-	QC_STATS_FILE=['QC_STATS_FILE']
+	MD5=params['BAM_MD5']
+	QC_STATS_FILE=params['QC_STATS_FILE']
 
 	#the submission directory
 	SUB_DIR="%s/submit/%s.partial"%(VOLUME,UUID)
@@ -53,24 +58,26 @@ def cghub_submit(params):
         	sys.stderr.write("Realignment Check error\n")
 		raise cpe
 	try:
-		cmd = "%s %s/synapseICGCMonitor getInfo %s --get-normal" % (PYTHON,BASEDIR,UUID)
+		cmd = "%s %s/synapseICGCMonitor getInfo %s --get-normal" % (PYTHON,SCRIPT_DIR,UUID)
 		(NORMAL_UUID,stderr)=run_command(cmd)
 	except CalledProcessError as cpe:
         	sys.stderr.write("Failed to get normal uuid from Synapse error\n")
 		raise cpe
 	try:
-		cmd = "%s %s/synapseICGCMonitor getResultID %s" % (PYTHON,BASEDIR,NORMAL_UUID)
+		cmd = "%s %s/synapseICGCMonitor getResultID %s" % (PYTHON,SCRIPT_DIR,NORMAL_UUID)
 		(NEW_NORMAL_UUID,stderr)=run_command(cmd)
 	except CalledProcessError as cpe:
         	sys.stderr.write("Failed to get new normal uuid from Synapse error\n")
 		raise cpe
 	try:
-		cmd = "%s %s/synapseICGCMonitor getResultID %s" % (PYTHON,BASEDIR,UUID)
+		cmd = "%s %s/synapseICGCMonitor getResultID %s" % (PYTHON,SCRIPT_DIR,UUID)
 		(NEW_UUID,stderr)=run_command(cmd)
 	except CalledProcessError as cpe:
         	sys.stderr.write("Failed to get new uuid from Synapse error\n")
 		raise cpe
-		
+	NEW_UUID=NEW_UUID.rstrip()	
+	NORMAL_UUID=NORMAL_UUID.rstrip()	
+	NEW_NORMAL_UUID=NEW_NORMAL_UUID.rstrip()	
 #create cghub validating metadata with ICGC specific metadata added to it
 	if not os.path.exists("%s/%s" % (SUB_DIR,NEW_UUID)) or not os.path.exists("%s/%s/trans.map" % (SUB_DIR,UUID)):
 		try:
@@ -110,7 +117,7 @@ def cghub_submit(params):
 			raise cpe
 	elif state != "live":
 		sys.stderr.write("not in a submitting/uploading state, but also not live, CHECK THIS ONE")
-		raise subrocess.CalledProcessError(1,"state not live")
+		raise CalledProcessError(1,"state not live")
 			
 	os.rename(SUB_DIR,FIN_DIR)
 
@@ -119,3 +126,17 @@ STEPS=cghub_submit
 RESUME=True
 STORE=False
 IMAGE="gtupload"
+
+def main():
+	params={}
+	params['volume']='/pod/home/cwilks/p'
+	params['UUID']='251916ec-f78e-4eae-99fe-ff802e3ce2fe'
+	params['ORIG_BAM_FILE']='/pod/home/cwilks/p/input/251916ec-f78e-4eae-99fe-ff802e3ce2fe/251916ec-f78e-4eae-99fe-ff802e3ce2fe.bam'	
+	params['BAM_FILE']='/pod/home/cwilks/p/output/251916ec-f78e-4eae-99fe-ff802e3ce2fe/251916ec-f78e-4eae-99fe-ff802e3ce2fe.bam'
+	params['QC_STATS_FILE']='/pod/home/cwilks/p/output/251916ec-f78e-4eae-99fe-ff802e3ce2fe/251916ec-f78e-4eae-99fe-ff802e3ce2fe.bam.bas'
+	params['BAM_MD5']='/pod/home/cwilks/p/output/251916ec-f78e-4eae-99fe-ff802e3ce2fe/251916ec-f78e-4eae-99fe-ff802e3ce2fe.bam.md5'
+	
+	cghub_submit(params)
+
+if __name__ == '__main__':
+	main()
