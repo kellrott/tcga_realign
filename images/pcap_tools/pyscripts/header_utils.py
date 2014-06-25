@@ -33,9 +33,12 @@ def create_header(analysis_outdir, metadata, rg_dict, specimen_dict, logger=defa
     header = "%s/header-%s.sam" %(analysis_outdir, rg_dict["ID"])
     header_file = open(header, "w")
     header_file.write("@HD\tVN:1.4\n")
-    header_file.write("@RG\tID:%s:%s\tCN:%s\tPL:%s\tPM:%s\tLB:%s:%s:%s\tPI:%s\tSM:%s\tPU:%s:%s\tDT:%s\n"
+    PI_STR = ""
+    if len(rg_dict["PI"]):
+		PI_STR="PI:%s\t" % (rg_dict["PI"])
+    header_file.write("@RG\tID:%s:%s\tCN:%s\tPL:%s\tPM:%s\tLB:%s:%s:%s\t%sSM:%s\tPU:%s:%s\tDT:%s\n"
                 %(metadata["center_name"], rgid,metadata["center_name"], metadata["platform"],metadata["platform_model"], metadata["seqtype"],
-                metadata["center_name"], rg_dict["LB"], rg_dict["PI"],metadata["aliquot_id"], rg_dict["CN"], rg_dict["PU"], getUTCDate(rg_dict["DT"])))
+                metadata["center_name"], rg_dict["LB"], PI_STR, metadata["aliquot_id"], rg_dict["CN"], rg_dict["PU"], getUTCDate(rg_dict["DT"])))
     header_file.write("@CO\tdcc_project_code:%s-US\n" %metadata["disease"])
     header_file.write("@CO\tsubmitter_donor_id:%s\n" %metadata["participant_id"])
     header_file.write("@CO\tsubmitter_specimen_id:%s\n" %metadata["sample_id"])
