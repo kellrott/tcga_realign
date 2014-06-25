@@ -19,6 +19,7 @@ import socket
 import logging
 import traceback
 import subprocess
+import multiprocessing
 
 logging.basicConfig(level=logging.INFO)
 
@@ -251,6 +252,13 @@ def run_build(args):
             cmd = "sudo docker build -t %s %s" % (image_name, image_dir)
         subprocess.check_call(cmd, shell=True)
 
+def func_run(q, func, params):
+    out = []
+    for fname, f in func(params):
+        out.append((fname,f))
+    q.put(out)
+
+
 def run_exec(args):
     logging.info("Starting Exec")
     #get the names of the working directory and the final output directory
@@ -277,8 +285,8 @@ def run_exec(args):
             odir = os.getcwd()
             orig_stdout = sys.stdout
             orig_stderr = sys.stderr
-            sys.stdout = open(finaldir + ".stdout", "w")
-            sys.stderr = open(finaldir + ".stderr", "w")
+            #sys.stdout = open(finaldir + ".stdout", "w")
+            #sys.stderr = open(finaldir + ".stderr", "w")
             if mod.RESUME:
                 params['outdir'] = workdir + ".partial"
                 if not os.path.exists(params['outdir']):
@@ -289,14 +297,29 @@ def run_exec(args):
             files = []
             os.chdir(params['outdir'])
             try:
+                flist = None
                 if callable(mod.STEPS):
-                    for func in mod.STEPS(params):
-                        for fname, f in func(params):
-                            files.append((fname,f))                    
+                    flist = mod.STEPS(params)
                 else:
-                    for func in mod.STEPS:
-                        for fname, f in func(params):
-                            files.append((fname,f))
+                    flist = mod.STEPS
+                
+                procs = []
+                q = multiprocessing.Queue()
+                for func in flist:
+                    p = multiprocessing.Process(target=func_run, args=(q,func,params,))
+                    p.start()
+                    procs.append(p)        
+                    print "Count",  sum( list( a.is_alive() for a in procs) )      
+                    while sum( list( a.is_alive() for a in procs) ) >= args.ncpus:
+                        time.sleep(1)
+
+                files = []
+                for p in procs:
+                     o = q.get()
+                     files.extend(o)
+                     p.join()
+                
+                    
             except:
                 with open(finaldir + ".error", "w") as err_handle:
                     traceback.print_exc(file=err_handle)
@@ -391,7 +414,7 @@ if __name__ == "__main__":
     parser_exec.add_argument("params")
     parser_exec.add_argument("--workdir", default="work")
     parser_exec.add_argument("--outdir", default="out")
-    parser_exec.add_argument("--ncpus", default="8")
+    parser_exec.add_argument("--ncpus", type=int, default=8)
     parser_exec.set_defaults(func=run_exec)
     
     
