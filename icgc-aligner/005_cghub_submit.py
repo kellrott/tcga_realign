@@ -116,7 +116,7 @@ def cghub_submit(params):
        	 		sys.stderr.write("CGHub file upload error, check error log %s/upload.stderr.log\n" % SUB_DIR)
 			raise cpe
 	elif state != "live":
-		sys.stderr.write("not in a submitting/uploading state, but also not live, CHECK THIS ONE")
+		sys.stderr.write("not in a submitting/uploading state, but also not live, CHECK THIS ONE\n")
 		raise CalledProcessError(1,"state not live")
 			
 	os.rename(SUB_DIR,FIN_DIR)
