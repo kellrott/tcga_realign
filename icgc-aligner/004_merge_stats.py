@@ -21,7 +21,40 @@ def run_tumor(params):
 	subprocess.check_call(cmd, shell=True)
 
 
-STEPS=[run_normal, run_tumor]
+class BAMStats:
+	def __init__(self, input_name, mode):
+		self.input_name = input_name
+		self.mode = mode
+
+	def run(self, params):
+		input_path = params[self.input_name + ":aligned_bam"]
+		output_path =  os.path.join(self.mode, "%s.stats" % (self.input_name))
+
+		cmd = "bam_stats.pl -i %s -o %s" % % (
+			input_path,
+			output_path
+		)
+		print "calling", cmd
+		subprocess.check_call(cmd, shell=True)
+		yield (self.input_name + ":aligned_stats", output_path)
+
+def merge_steps(params):
+	yield run_normal
+	yield run_tumor
+
+	if not os.path.exists("tumor"):
+		os.mkdir("tumor")
+	for rg in params['unaligned_tumor_bams']:
+		o = BAMStats(rg, "tumor")
+		yield o.run
+
+	if not os.path.exists("normal"):
+		os.mkdir("normal")
+	for rg in params['unaligned_normal_bams']:
+		o = BAMStats(rg, "normal")
+		yield o.run
+
+STEPS=merge_steps
 RESUME=False
 STORE=False
 IMAGE="pcap_tools"

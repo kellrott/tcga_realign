@@ -37,7 +37,7 @@ def run_pipeline(args):
             if m['id'] == args.id:
                 params = m
     params['ncpus'] = args.ncpus
-    
+
     if params is None:
         return
 
@@ -66,7 +66,7 @@ def run_pipeline(args):
         'host' : socket.gethostname(),
         'workdir' : iddir,
         'pid' : os.getpid()
-    }    
+    }
     with open(final_iddir + ".json", "w") as handle:
         handle.write(json.dumps(run_info))
     #create the pid file
@@ -108,13 +108,13 @@ def run_pipeline(args):
 %s \
 /pipeline/simple/simpleflow.py exec /pipeline/code --workdir /pipeline/work --outdir /pipeline/output %s %s %s" % (
                         os.geteuid(),
-                        os.path.abspath(args.workdir), 
+                        os.path.abspath(args.workdir),
                         os.path.abspath(args.outdir),
                         os.path.dirname(os.path.abspath(__file__)),
                         os.path.abspath(args.pipeline),
                         data_mount,
                         mod.IMAGE,
-                        args.id, name, 
+                        args.id, name,
                         os.path.join("/pipeline/work/", args.id, name + ".params")
                     )
                 else:
@@ -139,18 +139,18 @@ def run_pipeline(args):
             params_merge[name] = {}
             for row in data:
                 params_merge[name][row[0]] = row[1]
-                
-                
+
+
         print params, params_merge
     os.unlink(final_iddir + ".pid")
 
-def run_list(args):    
+def run_list(args):
     with open(args.workfile) as handle:
         for line in handle:
             data = json.loads(line)
-            print data['id'] 
+            print data['id']
 
-def get_job_states(args):    
+def get_job_states(args):
     id_state = {}
     modules = get_modules(args)
 
@@ -158,7 +158,7 @@ def get_job_states(args):
         for line in handle:
             data = json.loads(line)
             id = data['id']
-            final_iddir = os.path.join(args.outdir, id)    
+            final_iddir = os.path.join(args.outdir, id)
             if os.path.exists(final_iddir + ".pid"):
                 id_state[id] = "running"
             else:
@@ -168,14 +168,14 @@ def get_job_states(args):
                 for m in modules:
                     name = os.path.basename(m).replace(".py", "")
                     finaldir = os.path.abspath(os.path.join(args.outdir,id, name))
-                    
+
                     if not os.path.exists(finaldir + ".output"):
                         is_complete = False
                     else:
                         complete_count += 1
                     if os.path.exists(finaldir + ".error"):
                         in_error = True
-                
+
                 if in_error:
                     id_state[id] = "error"
                 else:
@@ -187,15 +187,15 @@ def get_job_states(args):
                         else:
                             id_state[id] = "ready"
     return id_state
-        
-def run_submit(args):    
+
+def run_submit(args):
     states = get_job_states(args)
     for i in range(args.n):
         select = None
         for s, v in states.items():
             if v in ["ready", "partial"]:
                 select = s
-        if select is not None:          
+        if select is not None:
             cmd = "qsub simpleflow.sh %s" % (select)
             if args.test:
                 print cmd
@@ -206,9 +206,9 @@ def run_submit(args):
             return
         if i != args.n - 1:
             time.sleep(args.sleep)
-    
 
-def run_states(args):        
+
+def run_states(args):
     states = get_job_states(args)
     for id, state in states.items():
         print "%s\t%s" % (id, state)
@@ -222,11 +222,11 @@ def run_scan(args):
                 try:
                     subprocess.check_call("ssh %s ps %s" % (m['host'], m['pid']), shell=True)
                 except subprocess.CalledProcessError:
-                    os.unlink(a)           
+                    os.unlink(a)
 
 
 def run_resume(args):
-    meta_path = os.path.join(args.outdir, args.id + ".json") 
+    meta_path = os.path.join(args.outdir, args.id + ".json")
     if os.path.exists(meta_path):
         with open(meta_path) as handle:
             line = handle.read()
@@ -247,9 +247,11 @@ def run_build(args):
     for image_dir in images:
         image_name = os.path.basename(image_dir)
         if args.flush:
-            cmd = "sudo docker build --no-cache -t %s %s" % (image_name, image_dir)
+            cmd = "docker build --no-cache -t %s %s" % (image_name, image_dir)
         else:
-            cmd = "sudo docker build -t %s %s" % (image_name, image_dir)
+            cmd = "docker build -t %s %s" % (image_name, image_dir)
+        if not args.skip_sudo:
+            cmd = "sudo " + cmd
         subprocess.check_call(cmd, shell=True)
 
 def func_run(q, func, params):
@@ -267,10 +269,10 @@ def run_exec(args):
     with open(args.params) as handle:
         txt = handle.read()
         params_all = json.loads(txt)
-        
+
     params = params_all['base']
     params_merge = params_all['merge']
-    
+
     modules = get_modules(args)
     for m in modules:
         name = os.path.basename(m).replace(".py", "")
@@ -302,14 +304,14 @@ def run_exec(args):
                     flist = mod.STEPS(params)
                 else:
                     flist = mod.STEPS
-                
+
                 procs = []
                 q = multiprocessing.Queue()
                 for func in flist:
                     p = multiprocessing.Process(target=func_run, args=(q,func,params,))
                     p.start()
-                    procs.append(p)        
-                    print "Count",  sum( list( a.is_alive() for a in procs) )      
+                    procs.append(p)
+                    print "Count",  sum( list( a.is_alive() for a in procs) )
                     while sum( list( a.is_alive() for a in procs) ) >= args.ncpus:
                         time.sleep(1)
 
@@ -318,8 +320,8 @@ def run_exec(args):
                      o = q.get()
                      files.extend(o)
                      p.join()
-                
-                    
+
+
             except:
                 with open(finaldir + ".error", "w") as err_handle:
                     traceback.print_exc(file=err_handle)
@@ -328,7 +330,7 @@ def run_exec(args):
             sys.stderr = orig_stderr
             sys.stdout = orig_stdout
             os.chdir(odir)
-            
+
             if mod.STORE:
                 shutil.move(params['outdir'], finaldir)
             else:
@@ -340,7 +342,7 @@ def run_exec(args):
         else:
             if name in params_merge:
                 for ename, evalue in params_merge[name].items():
-                    if isinstance(evalue, basestring): 
+                    if isinstance(evalue, basestring):
                         if mod.STORE:
                             params[ename] = os.path.join(finaldir, evalue)
                         else:
@@ -348,7 +350,7 @@ def run_exec(args):
                     else:
                             params[ename] = evalue
 
-            
+
 
 
 
@@ -362,7 +364,7 @@ if __name__ == "__main__":
     parser_run.add_argument("--ncpus", default="8")
     parser_run.add_argument("--data", action="append")
     parser_run.add_argument("--docker", action="store_true", default=False)
-    
+
     parser_run.add_argument("pipeline")
     parser_run.add_argument("workfile")
     parser_run.add_argument("id")
@@ -371,29 +373,29 @@ if __name__ == "__main__":
     parser_list = subparsers.add_parser('list')
     parser_list.add_argument("workfile")
     parser_list.set_defaults(func=run_list)
-    
+
     parser_submit = subparsers.add_parser('submit')
     parser_submit.add_argument("pipeline")
     parser_submit.add_argument("workfile")
     parser_submit.add_argument("--outdir", default="out")
-    parser_submit.add_argument("-n", type=int, default=1)    
+    parser_submit.add_argument("-n", type=int, default=1)
     parser_submit.add_argument("-s", "--sleep", type=int, default=10)
     parser_submit.add_argument("-t", "--test", action="store_true", default=False)
-    
+
     parser_submit.set_defaults(func=run_submit)
-    
+
     parser_states = subparsers.add_parser('states')
     parser_states.add_argument("pipeline")
     parser_states.add_argument("workfile")
     parser_states.add_argument("--outdir", default="out")
     parser_states.set_defaults(func=run_states)
-    
+
     parser_scan = subparsers.add_parser('scan')
     parser_scan.add_argument("pipeline")
     parser_scan.add_argument("workfile")
     parser_scan.add_argument("--outdir", default="out")
     parser_scan.set_defaults(func=run_scan)
-    
+
     parser_resume = subparsers.add_parser('resume')
     parser_resume.add_argument("pipeline")
     parser_resume.add_argument("workfile")
@@ -404,6 +406,7 @@ if __name__ == "__main__":
     parser_build = subparsers.add_parser('build')
     parser_build.add_argument("--dir", default="images")
     parser_build.add_argument("--image", default=None)
+    parser_build.add_argument("--skip-sudo", action="store_true", default=False)
     parser_build.add_argument("-f", "--flush", action="store_true", default=False)
     parser_build.set_defaults(func=run_build)
 
@@ -416,7 +419,7 @@ if __name__ == "__main__":
     parser_exec.add_argument("--outdir", default="out")
     parser_exec.add_argument("--ncpus", type=int, default=8)
     parser_exec.set_defaults(func=run_exec)
-    
-    
+
+
     args = parser.parse_args()
     sys.exit(args.func(args))
