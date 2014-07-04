@@ -6,7 +6,7 @@ import string
 from glob import glob
 import os
 
-MARKDUP="bammarkduplicates O=${OUTFILE} M={METRICS_FILE} markthreads=8 rewritebam=1 rewritebamlevel=1 index=1 md5=1 tmpfile=${TMPBASE}"
+MARKDUP="bammarkduplicates O=${OUTFILE} M=${METRICS_FILE} markthreads=8 rewritebam=1 rewritebamlevel=1 index=1 md5=1 tmpfile=${TMPBASE}"
 
 def run_normal(params):
 	cmd = string.Template(MARKDUP).substitute(dict(params, OUTFILE="PAWG.%s.bam" % (params['normal_id']), METRICS_FILE="normal.metric", TMPBASE="tmp_normal"))
@@ -30,7 +30,7 @@ class BAMStats:
 		input_path = params[self.input_name + ":aligned_bam"]
 		output_path =  os.path.join(self.mode, "%s.stats" % (self.input_name))
 
-		cmd = "bam_stats.pl -i %s -o %s" % % (
+		cmd = "bam_stats.pl -i %s -o %s" % (
 			input_path,
 			output_path
 		)

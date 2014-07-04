@@ -106,7 +106,7 @@ def run_pipeline(args):
 -v %s:/pipeline/code \
 %s \
 %s \
-/pipeline/simple/simpleflow.py exec /pipeline/code --workdir /pipeline/work --outdir /pipeline/output %s %s %s" % (
+/pipeline/simple/simplechain.py exec /pipeline/code --workdir /pipeline/work --outdir /pipeline/output %s %s %s" % (
                         os.geteuid(),
                         os.path.abspath(args.workdir),
                         os.path.abspath(args.outdir),
@@ -196,7 +196,7 @@ def run_submit(args):
             if v in ["ready", "partial"]:
                 select = s
         if select is not None:
-            cmd = "qsub simpleflow.sh %s" % (select)
+            cmd = "qsub simplechain.sh %s" % (select)
             if args.test:
                 print cmd
             else:
@@ -233,7 +233,7 @@ def run_resume(args):
             m = json.loads(line)
         for e in glob(os.path.join(args.outdir, args.id, "*.error")):
             os.unlink(e)
-        cmd = "qsub -l hostname=%s simpleflow.sh %s" % (m['host'], args.id)
+        cmd = "qsub -l hostname=%s simplechain.sh %s" % (m['host'], args.id)
         print cmd
         subprocess.check_call(cmd, shell=True)
 
