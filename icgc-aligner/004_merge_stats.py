@@ -13,12 +13,14 @@ def run_normal(params):
 	for i in params['unaligned_normal_bams']:
 		cmd += " I=%s" % (params[i+":aligned_bam"])
 	subprocess.check_call(cmd, shell=True)
+	yield ("normal_merged", "PAWG.%s.bam" % (params['normal_id']))
 
 def run_tumor(params):
-	cmd = string.Template(MARKDUP).substitute(dict(params, OUTFILE="PAWG.%s.bam" % (params['normal_id']), METRICS_FILE="tumor.metric", TMPBASE="tmp_tumor"))
+	cmd = string.Template(MARKDUP).substitute(dict(params, OUTFILE="PAWG.%s.bam" % (params['tumor_id']), METRICS_FILE="tumor.metric", TMPBASE="tmp_tumor"))
 	for i in params['unaligned_tumor_bams']:
 		cmd += " I=%s" % (params[i+":aligned_bam"])
 	subprocess.check_call(cmd, shell=True)
+	yield ("tumor_merged", "PAWG.%s.bam" % (params['tumor_id']))
 
 
 class BAMStats:
