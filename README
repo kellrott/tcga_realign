@@ -1,6 +1,14 @@
 
-Setup
+Setup Docker images
 
-1) Add list of network attached volumes to volume.list
+./simplechain.py build
 
-2) Configure 'align.conf', set KEYFILE and ASSIGNEE
+Sample data run:
+
+./simplechain.py run icgc-aligner icgc-aligner.test 1 \
+--workdir align_test/work \
+--outdir align_test/out \
+--docker \
+--data /path/to/keys/:/keys \
+--data /path/to/reference/data/:/data
+
