@@ -39,7 +39,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NO
         os.mkdir(SUB_DIR)
 
     if not os.path.exists("%s/PAWG.%s.bam" % (SUB_DIR,UUID)):
-        os.symlink(BAM_FILE,"%s/PAWG.%s.bam"%(SUB_DIR,UUID))
+        os.symlink(os.path.relpath(BAM_FILE, SUB_DIR),"%s/PAWG.%s.bam"%(SUB_DIR,UUID))
 
     #put metric compareing $ORIG_FILE and $BAM_FILE and save stats to $SUB_DIR
     try:

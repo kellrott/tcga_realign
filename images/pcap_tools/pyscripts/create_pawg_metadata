@@ -203,8 +203,8 @@ def main():
     run_command("cat %s/analysis.new.xml | egrep -v -e '<!--' > %s/analysis.xml" % (ANALYSIS_ID,ANALYSIS_ID))
     if os.path.exists( os.path.join(ANALYSIS_ID,FILENAME) ):
         os.unlink( os.path.join(ANALYSIS_ID,FILENAME) )
-    run_command("ln -s %s/%s %s/" % (PATH_TO_BAM,FILENAME,ANALYSIS_ID))
- 
+    #run_command("ln -s %s/%s %s/" % (PATH_TO_BAM,FILENAME,ANALYSIS_ID))
+    os.symlink(os.path.relpath(PATH_TO_BAM, ANALYSIS_ID), os.path.join(ANALYSIS_ID,FILENAME))
     #create new uuid and dir:
     if NEW_UUID is not None:
         nuuid = uuid.UUID(NEW_UUID)
@@ -212,7 +212,8 @@ def main():
         nuuid = uuid.uuid4()
     run_command("mkdir ./%s" % (nuuid))
     run_command("rsync -av ./%s/*.xml ./%s/" % (ANALYSIS_ID,nuuid))
-    run_command("ln -s %s/%s %s/" % (PATH_TO_BAM,FILENAME,nuuid))
+    #run_command("ln -s %s/%s %s/" % (PATH_TO_BAM,FILENAME,nuuid))
+    os.symlink(os.path.relpath(os.path.join(PATH_TO_BAM,FILENAME), str(nuuid)), os.path.join(str(nuuid),FILENAME))
     outf = open("./%s/trans.map"%(ANALYSIS_ID),"w")
     outf.write("%s\t%s\t%s\n"%(ANALYSIS_ID,nuuid,NEW_NORMAL_UUID))
     outf.close()
