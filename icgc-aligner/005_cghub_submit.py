@@ -10,12 +10,11 @@ import os
 #just for initial debug, these will be filled in by the conf read
 #PYTHON="/pod/home/kellrott/bin/python"
 #PYTHON="/pod/home/kellrott/bin/python"
-PYTHON="/pod/opt/bin/python"
-SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_merged/images/pcap_tools/pyscripts"
-PERL = "/pod/home/cwilks/p/myperl/perl"
+PYTHON="/usr/bin/python"
+SCRIPT_DIR="/opt/pyscripts"
+PERL = "/usr/bin/perl"
 #UPLOAD_KEY = "/keys/UCSC_PAWG.key"
-#UPLOAD_KEY = "/keys/JOSH_PAWG_stage.key"
-UPLOAD_KEY = "/pod/home/cwilks/JOSH_PAWG_stage.key"
+UPLOAD_KEY = "/keys/JOSH_PAWG_stage.key"
 
 def run_command(command=str, cwd=None):
     print "Running: %s" % (command)
@@ -91,6 +90,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NO
         else:
             cmd = "curl -sk https://cghub.ucsc.edu/cghub/metadata/analysisDetail?analysis_id=%s | egrep -ie '<state>' | cut -d'>' -f 2 | cut -d\"<\" -f 1" % (NEW_UUID)
         (state,stderr)=run_command(cmd, SUB_DIR)
+        state = state.rstrip()
     except CalledProcessError as cpe:
         sys.stderr.write("CGHub WSI query for state for %s failed\n" % (NEW_UUID))
         raise cpe
@@ -115,7 +115,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NO
             raise cpe
     elif state != "live":
         sys.stderr.write("not in a submitting/uploading state, but also not live, CHECK THIS ONE\n")
-        raise CalledProcessError(1,"state not live")
+        raise CalledProcessError(1,"state not live: %s" % (state))
     print "calling rename"        
     os.rename(SUB_DIR,FIN_DIR)
 
@@ -128,8 +128,9 @@ def cghub_submit_normal(params):
         ORIG_BAM_FILE=params['normal_bam'], 
         BAM_FILE=params['normal_merged'],
         MD5=params['normal_merged'] + ".md5",
-        UPLOAD_KEY=['upload_key'],
-        QC_STATS_FILE=bas_file)
+        UPLOAD_KEY=UPLOAD_KEY,
+        QC_STATS_FILE=bas_file,
+        debug=True)
 
 
 
