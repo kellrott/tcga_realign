@@ -37,14 +37,12 @@ parser.add_option("-f", action="store",type='string',dest="filename",help="REQUI
 parser.add_option("-p", action="store",type='string',dest="path_to_working_dir",default="./",help="OPTIONAL: path to working dir with should contain the BAM to be submitted and where the updated xmls will be placed, if not in the analysis_id directory")
 parser.add_option("-t", action="store",type='string',dest="new_normal_uuid",default=None,help="REQUIRED: new analysis uuid for the associated realigned normal (for use_cntl)")
 parser.add_option("-n", action="store",type='string',dest="new_uuid",default=None,help="OPTIONAL: new analysis uuid of this realigned bam")
-#parser.add_option("-i", action="store",type='string',dest="info_file",default=None,help="OPTIONAL: info file to be added to analysis attributes")
 parser.add_option("-s", action="store",type='string',dest="specimen_file",default=os.path.join(basedir,'tcga_dcc_specimen_type.txt'),help="OPTIONAL: mapping file between TCGA sample id and ICGC sample name")
 
 (options,args) = parser.parse_args()
 ANALYSIS_ID=options.analysis_id
 CHECKSUM=options.checksum
 FILENAME=options.filename
-#INFOFILE=options.info_file
 NEW_UUID=options.new_uuid
 NEW_NORMAL_UUID=options.new_normal_uuid
 SPECIMEN_FILE=options.specimen_file
