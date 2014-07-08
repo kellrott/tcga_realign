@@ -1,4 +1,3 @@
-
 import sys
 import subprocess
 from subprocess import CalledProcessError
@@ -8,13 +7,15 @@ from glob import glob
 import os
     
 #just for initial debug, these will be filled in by the conf read
-#PYTHON="/pod/home/kellrott/bin/python"
-#PYTHON="/pod/home/kellrott/bin/python"
+DEBUG_PYTHON="/pod/opt/bin/python"
+DEBUG_SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_merged/images/pcap_tools/pyscripts"
+DEBUG_UPLOAD_KEY="/pod/home/cwilks/JOSH_PAWG_stage.key"
+DEBUG_PERL="/pod/home/cwilks/p/myperl/perl"
+
 PYTHON="/usr/bin/python"
 SCRIPT_DIR="/opt/pyscripts"
 PERL = "/usr/bin/perl"
-#UPLOAD_KEY = "/keys/UCSC_PAWG.key"
-UPLOAD_KEY = "/keys/JOSH_PAWG_stage.key"
+UPLOAD_KEY = "/keys/UCSC_PAWG.key"
 
 def run_command(command=str, cwd=None):
     print "Running: %s" % (command)
@@ -41,13 +42,13 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NO
     if not os.path.exists(SUB_DIR):
         os.mkdir(SUB_DIR)
 
-    if not os.path.exists("%s/PAWG.%s.bam" % (SUB_DIR,UUID)):
-        os.symlink(os.path.relpath(BAM_FILE, SUB_DIR),"%s/PAWG.%s.bam"%(SUB_DIR,UUID))
+    if not os.path.exists("%s/PCAWG.%s.bam" % (SUB_DIR,UUID)):
+        os.symlink(os.path.relpath(BAM_FILE, SUB_DIR),"%s/PCAWG.%s.bam"%(SUB_DIR,UUID))
 
     #put metric compareing $ORIG_FILE and $BAM_FILE and save stats to $SUB_DIR
     try:
         if debug:
-            cmd = "%s %s/realigned_bam_check -o %s -n %s -p %s" % (PYTHON,SCRIPT_DIR,ORIG_BAM_FILE,BAM_FILE,SUB_DIR)
+            cmd = "%s %s/realigned_bam_check -o %s -n %s -p %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,ORIG_BAM_FILE,BAM_FILE,SUB_DIR)
         else:
             cmd = "realigned_bam_check -o %s -n %s -p %s" % (ORIG_BAM_FILE,BAM_FILE,SUB_DIR)
         (stdout,stderr)=run_command(cmd)
@@ -64,26 +65,35 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NO
         md5=md5.rstrip()
     
 #create cghub validating metadata with ICGC specific metadata added to it
-    if not os.path.exists("%s/%s" % (SUB_DIR,NEW_UUID)) or not os.path.exists("%s/%s/trans.map" % (SUB_DIR,UUID)):
+    #if not os.path.exists("%s/%s" % (SUB_DIR,NEW_UUID)) or not os.path.exists("%s/%s" % (SUB_DIR,UUID)):
+    #if not os.path.exists( os.path.join(SUB_DIR,NEW_UUID"trans.map") ):
+    if not os.path.exists( os.path.join(SUB_DIR,"MD_DONE") ):
         try:
             if debug:
-                cmd = "%s %s/create_pawg_metadata -u %s -f PAWG.%s.bam -c %s -t %s -n %s -p %s" % (PYTHON,SCRIPT_DIR,UUID,UUID,md5,NEW_NORMAL_UUID,NEW_UUID,SUB_DIR)
+                cmd = "%s %s/create_pawg_metadata -u %s -f PCAWG.%s.bam -c %s -t %s -n %s -p %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,UUID,UUID,md5,NEW_NORMAL_UUID,NEW_UUID,SUB_DIR)
             else:
-                cmd = "create_pawg_metadata -u %s -f PAWG.%s.bam -c %s -t %s -n %s -p %s" % (UUID,UUID,md5,NEW_NORMAL_UUID,NEW_UUID,SUB_DIR)
+                cmd = "create_pawg_metadata -u %s -f PCAWG.%s.bam -c %s -t %s -n %s -p %s" % (UUID,UUID,md5,NEW_NORMAL_UUID,NEW_UUID,SUB_DIR)
             (stdout,stderr)=run_command(cmd)
         except CalledProcessError as cpe:
             sys.stderr.write("CGHub metadata creation error\n")
             raise cpe
+
+        #add the QC metrics to the metadata
         try:
             if debug:
-                cmd = "%s %s/add_qc_results_to_metadata.pl %s/%s/analysis.xml %s" % (PERL,SCRIPT_DIR,SUB_DIR,NEW_UUID,QC_STATS_FILE)
+                cmd = "%s %s/add_qc_results_to_metadata.pl %s/%s/analysis.xml %s" % (DEBUG_PERL,DEBUG_SCRIPT_DIR,SUB_DIR,NEW_UUID,QC_STATS_FILE)
             else:
-                cmd = "add_qc_results_to_metadata.pl %s/%s/analysis.xml %s" % (SUB_DIR,NEW_UUID,QC_STATS_FILE)
+                cmd = "%s add_qc_results_to_metadata.pl %s/%s/analysis.xml %s" % (SUB_DIR,NEW_UUID,QC_STATS_FILE)
             (stdout,stderr)=run_command(cmd)
         except CalledProcessError as cpe:
             sys.stderr.write("CGHub QC stats/ICGC fields addition to metadata error\n")
             raise cpe
-        
+
+        #write sentinal file
+        with open( os.path.join(SUB_DIR,"MD_DONE"), "w" ) as outf:
+            outf.write("metadata generated finished successfully\n")
+
+    #check submission state    
     try:
         if debug:
             cmd = "curl -sk https://stage.cghub.ucsc.edu/cghub/metadata/analysisDetail?analysis_id=%s | egrep -ie '<state>' | cut -d'>' -f 2 | cut -d\"<\" -f 1" % (NEW_UUID)
@@ -95,20 +105,48 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NO
         sys.stderr.write("CGHub WSI query for state for %s failed\n" % (NEW_UUID))
         raise cpe
 
-    if state is None or state == "":
+    #not submitted yet
+    #if ( state is None or state == "" ) and not os.path.exists( os.path.join(SUB_DIR,"MD_DONE") ):
+    if not os.path.exists( os.path.join(SUB_DIR,"SUBMIT_DONE") ):
         try:
             if debug:
-                cmd = "%s %s/cgsubmit -s https://stage.cghub.ucsc.edu -c %s -u %s" % (PYTHON,SCRIPT_DIR,UPLOAD_KEY,NEW_UUID)
+                cmd = "%s %s/cgsubmit -s https://stage.cghub.ucsc.edu -c %s -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,DEBUG_UPLOAD_KEY,NEW_UUID)
             else:
                 cmd = "cgsubmit -c %s -u %s" % (UPLOAD_KEY,NEW_UUID)
             (stdout,stderr)=run_command(cmd, SUB_DIR)
         except CalledProcessError as cpe:
             sys.stderr.write("CGHub metadata submission error\n")
             raise cpe
-                    
+        
+        #write sentinal value
+        with open( os.path.join(SUB_DIR,"SUBMIT_DONE"), "w" ) as outf:
+            outf.write("metadata submitted finished successfully\n")
+         
+    #submitted but manifest file needed for upload is probably gone, recreate by doing a valiadtion only submission (indempotent)
+    elif not os.path.exists( os.path.join(SUB_DIR,NEW_UUID,"manifest.xml") ):
+        try:
+            if debug:
+                cmd = "%s %s/cgsubmit -s https://stage.cghub.ucsc.edu --validate-only -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,NEW_UUID)
+            else:
+                cmd = "cgsubmit --validate-only -u %s" % (NEW_UUID)
+            (stdout,stderr)=run_command(cmd, SUB_DIR)
+        except CalledProcessError as cpe:
+            sys.stderr.write("CGHub metadata submission manifest recreation error\n")
+            raise cpe
+        #must also delete any existing gto files
+        try:
+            run_command("rm %s" % (os.path.join(SUB_DIR,NEW_UUID,"*.gto*")))
+        except CalledProcessError as cpe:
+            sys.stderr.write("CGHub gto deletion error\n")
+            raise cpe
+
+    #try to upload if in the right (or non-existent) state 
     if state is None or state == "" or state == "submitted" or state == "uploading":
         try:
-            cmd = "gtupload -c %s -u %s/manifest.xml -vv 2>%s/upload.stderr.log" % (UPLOAD_KEY,NEW_UUID,SUB_DIR)
+            if debug:
+                cmd = "gtupload -c %s -u %s/manifest.xml -vv 2>%s/upload.stderr.log" % (DEBUG_UPLOAD_KEY,NEW_UUID,SUB_DIR)
+            else:
+                cmd = "gtupload -c %s -u %s/manifest.xml -vv 2>%s/upload.stderr.log" % (UPLOAD_KEY,NEW_UUID,SUB_DIR)
             (stdout,stderr)=run_command(cmd, SUB_DIR)
         except CalledProcessError as cpe:
             sys.stderr.write("CGHub file upload error, check error log %s/upload.stderr.log\n" % SUB_DIR)
@@ -116,11 +154,13 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NO
     elif state != "live":
         sys.stderr.write("not in a submitting/uploading state, but also not live, CHECK THIS ONE\n")
         raise CalledProcessError(1,"state not live: %s" % (state))
-    print "calling rename"        
+
+    #finally finish by renaming working dir
+    #print "finishing with the rename"        
     os.rename(SUB_DIR,FIN_DIR)
 
 def cghub_submit_normal(params):
-    bas_file = "PAWG.%s.bas" % ( params['normal_id'] )
+    bas_file = "PCAWG.%s.bas" % ( params['normal_id'] )
     cghub_submit(UUID=params['normal_id'], 
         NEW_UUID=params['new_normal_id'],
         NORMAL_UUID=params['normal_id'],
@@ -136,14 +176,18 @@ def cghub_submit_normal(params):
 
 #STEPS=[realigned_bam_check,create_pawg_metadata,cgsubmit,gtupload]
 STEPS=[cghub_submit_normal]
-RESUME=False
+RESUME=True
 STORE=False
 IMAGE="pcap_tools"
 
 def main():
     #ONLY USE test (non-protected) data with debug as it will upload to stage 
     cghub_submit(UUID='251916ec-f78e-4eae-99fe-ff802e3ce2fe',
-                 NEW_UUID='d3afc141-bd34-41a5-bbab-4a65c3b0ec27',
+                 #NEW_UUID='d3afc141-bd34-41a5-bbab-4a65c3b0ec27',
+                 #NEW_UUID='c48a703e-48bd-4a6a-8948-c64f87c9cb82',
+                 #NEW_UUID='d3d3aa8d-fab4-43e4-83c9-6102cdaf4ab1',
+                 #NEW_UUID='b8acbf32-0867-488a-a4d9-984a33345536',
+                 NEW_UUID='e62e9cf6-c04c-4a3b-bf27-df43845ff6c7',
                  NORMAL_UUID='a0963407-05e7-4c84-bfe0-34aacac08eed',
                  NEW_NORMAL_UUID='97112394-e3e6-4bf4-b4a6-6251fd80c711',
                  ORIG_BAM_FILE='/pod/home/cwilks/p/input/251916ec-f78e-4eae-99fe-ff802e3ce2fe/251916ec-f78e-4eae-99fe-ff802e3ce2fe.bam',

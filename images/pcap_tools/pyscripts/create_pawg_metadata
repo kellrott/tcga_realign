@@ -20,6 +20,7 @@ import subprocess
 from subprocess import Popen
 import uuid
 import logging
+import shutil
 #import UofC's utils for getting CGHub's sample/aliquot level (DCC-sourced) metadata into the ANALYSIS_ATTRIBUTES for ICGC
 import pcap_split
 import header_utils
@@ -301,29 +302,43 @@ def add_icgc_specific_metadata(xp,root):
 
 def main():
     sys.stdout.write("Processing uuid: %s\n" % ANALYSIS_ID)
+
+    if os.path.exists( ANALYSIS_ID ):
+        shutil.rmtree( ANALYSIS_ID )
     data=CGHWSI.retrieve_analysis_attributes_for_uuid(ANALYSIS_ID)
     error=CGHWSI.split_analysis_attributes(data,ANALYSIS_ID)
+    
     run_command("rsync -av %s/analysis.xml %s/analysis.xml.orig" % (ANALYSIS_ID,ANALYSIS_ID))
     process_analysis_xml(ANALYSIS_ID,FILENAME,CHECKSUM,PATH_TO_WORKING)
     run_command("cat %s/analysis.new.xml | egrep -v -e '<!--' > %s/analysis.xml" % (ANALYSIS_ID,ANALYSIS_ID))
-    if os.path.exists( os.path.join(ANALYSIS_ID,FILENAME) ):
-        os.unlink( os.path.join(ANALYSIS_ID,FILENAME) )
-    #run_command("ln -s %s/%s %s/" % (PATH_TO_WORKING,FILENAME,ANALYSIS_ID))
-    os.rename(ANALYSIS_ID,"%s/%s" % (PATH_TO_WORKING,ANALYSIS_ID))
-    #os.symlink(os.path.relpath(PATH_TO_WORKING, ANALYSIS_ID), os.path.join(ANALYSIS_ID,FILENAME))
+    
+    #if this analysis id dir is already present under the working path, then delete it and move the latest one
+    #the assumption is that if we're running this script and these dirs still exist, they should be deleted and recreated
+    if os.path.exists( os.path.join(PATH_TO_WORKING,ANALYSIS_ID) ):
+        shutil.rmtree( os.path.join(PATH_TO_WORKING,ANALYSIS_ID) )
+
+    os.rename(ANALYSIS_ID,os.path.join(PATH_TO_WORKING,ANALYSIS_ID))
 
     #create new uuid and dir:
     if NEW_UUID is not None:
-        nuuid = uuid.UUID(NEW_UUID)
+        nuuid = str(uuid.UUID(NEW_UUID))
     else:
-        nuuid = uuid.uuid4()
-    run_command("mkdir -p %s/%s" % (PATH_TO_WORKING,nuuid))
+        nuuid = str(uuid.uuid4())
+   
+    #get rid of this dir if it already exists 
+    if os.path.exists( os.path.join(PATH_TO_WORKING,nuuid) ):
+        shutil.rmtree( os.path.join(PATH_TO_WORKING,nuuid) )
+
+    #run_command("mkdir -p %s/%s" % (PATH_TO_WORKING,nuuid))
+    os.mkdir(os.path.join(PATH_TO_WORKING,nuuid))
     run_command("rsync -av %s/%s/*.xml %s/%s/" % (PATH_TO_WORKING,ANALYSIS_ID,PATH_TO_WORKING,nuuid))
     #run_command("ln -f -s %s/%s %s/%s/" % (PATH_TO_WORKING,FILENAME,PATH_TO_WORKING,nuuid))
     os.symlink(os.path.relpath(os.path.join(PATH_TO_WORKING,FILENAME), os.path.join(PATH_TO_WORKING,str(nuuid))), os.path.join(PATH_TO_WORKING,str(nuuid),FILENAME))
-    outf = open("%s/%s/trans.map"%(PATH_TO_WORKING,nuuid),"w")
+    #outf = open("%s/%s/trans.map"%(PATH_TO_WORKING,nuuid),"w")
+    outf = open( os.path.join(PATH_TO_WORKING,nuuid,"trans.map"), "w")
     outf.write("%s\t%s\t%s\n"%(ANALYSIS_ID,nuuid,NEW_NORMAL_UUID))
     outf.close()
+	
 
 if __name__ == '__main__':
     main()

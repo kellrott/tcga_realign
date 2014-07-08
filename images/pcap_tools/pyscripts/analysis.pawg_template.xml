@@ -3,7 +3,7 @@
     <!--CGHub script updates alias and analysis_date-->
     <ANALYSIS alias="REPLACE_ME.bam" analysis_date="DATE" center_name="UCSC">
     <TITLE>WARNING: TCGA/ICGC PanCancer Specimen-Level Alignment for Specimen SAMPLE1 from Participant PARTICIPANT1.  This is VOLATILE data.</TITLE>
-    <STUDY_REF refcenter="OICR" refname="PAWG">
+    <STUDY_REF refcenter="OICR" refname="PCAWG 2.0">
     </STUDY_REF>
     <DESCRIPTION>Specimen-level BAM from the reference alignment of specimen SAMPLE1 from donor PARTICIPANT1. This uses an implementation of the SeqWare BWA-Mem PanCancer Workflow version 2.5.0 available at https://s3.amazonaws.com/oicr.workflow.bundles/released-bundles/Workflow_Bundle_BWA_2.5.0_SeqWare_1.0.13.zip.  This workflow can be created from source, see https://github.com/SeqWare/public-workflows.  New features for this workflow compared to 2.4 include: 1) an option for skipping download/upload from/to GNOS and instead use local file paths (GNOS is still used to retrieve and validate metadata).  Please note the reference is hs37d, see ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/phase2_reference_assembly_sequence/README_human_reference_20110707 for more information. Briefly this is the integrated reference sequence from the GRCh37 primary assembly (chromosomal plus unlocalized and unplaced contigs), the rCRS mitochondrial sequence (AC:NC_012920), Human herpesvirus 4 type 1 (AC:NC_007605) and the concatenated decoy sequences (hs37d5cs.fa.gz).</DESCRIPTION>
     <ANALYSIS_TYPE>
@@ -138,7 +138,7 @@
 <!--CGHub script replaces data_block name, checksum, and filename based on arguments passed in per BAM-->
     <DATA_BLOCK name="REPLACE_ME">
       <FILES>
-        <FILE checksum="REPLACE_ME" checksum_method="MD5" filename="PAWG.REPLACE_ME.bam" filetype="bam"/>
+        <FILE checksum="REPLACE_ME" checksum_method="MD5" filename="PCAWG.REPLACE_ME.bam" filetype="bam"/>
       </FILES>
     </DATA_BLOCK>
           <!-- most of these need to be overwritten by actual PanCan re-alignment values-->
@@ -146,7 +146,7 @@
     <ANALYSIS_ATTRIBUTES>
       <ANALYSIS_ATTRIBUTE>
         <TAG>STUDY</TAG>
-        <VALUE>PAWG</VALUE>
+        <VALUE>PCAWG 2.0</VALUE>
       </ANALYSIS_ATTRIBUTE>
     </ANALYSIS_ATTRIBUTES>
   </ANALYSIS>
