@@ -3,7 +3,7 @@
     <!--CGHub script updates alias and analysis_date-->
     <ANALYSIS alias="REPLACE_ME.bam" analysis_date="DATE" center_name="UCSC">
     <TITLE>WARNING: TCGA/ICGC PanCancer Specimen-Level Alignment for Specimen SAMPLE1 from Participant PARTICIPANT1.  This is VOLATILE data.</TITLE>
-    <STUDY_REF refcenter="OICR" refname="PCAWG 2.0">
+    <STUDY_REF refcenter="OICR" refname="PCAWG_TEST">
     </STUDY_REF>
     <DESCRIPTION>Specimen-level BAM from the reference alignment of specimen SAMPLE1 from donor PARTICIPANT1. This uses the SeqWare BWA-Mem PanCancer Workflow version 2.6.0 available at https://s3.amazonaws.com/oicr.workflow.bundles/released-bundles/Workflow_Bundle_BWA_2.5.0_SeqWare_1.0.13.zip.  This workflow can be created from source, see https://github.com/SeqWare/public-workflows. Input BAMs are prepared and submitted to GNOS server according to the submission SOP documented at: https://wiki.oicr.on.ca/display/PANCANCER/PCAP+%28a.k.a.+PAWG%29+Sequence+Submission+SOP+-+v1.0</DESCRIPTION>
     <ANALYSIS_TYPE>
@@ -146,7 +146,7 @@
     <ANALYSIS_ATTRIBUTES>
       <ANALYSIS_ATTRIBUTE>
         <TAG>STUDY</TAG>
-        <VALUE>PCAWG 2.0</VALUE>
+        <VALUE>PCAWG_TEST</VALUE>
       </ANALYSIS_ATTRIBUTE>
       <ANALYSIS_ATTRIBUTE>
         <TAG>workflow_name</TAG>

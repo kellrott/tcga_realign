@@ -7,15 +7,20 @@ from glob import glob
 import os
     
 #just for initial debug, these will be filled in by the conf read
+#used currently primarily to test different paths, the destination repo server and study is the same (cghub prod:PCAWG_TEST)
 DEBUG_PYTHON="/pod/opt/bin/python"
 DEBUG_SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_merged/images/pcap_tools/pyscripts"
-DEBUG_UPLOAD_KEY="/pod/home/cwilks/JOSH_PAWG_stage.key"
+#DEBUG_UPLOAD_KEY="/pod/home/cwilks/JOSH_PAWG_stage.key"
+DEBUG_UPLOAD_KEY="/pod/home/cwilks/UCSC_PAWG.key"
 DEBUG_PERL="/pod/home/cwilks/p/myperl/perl"
 
 PYTHON="/usr/bin/python"
 SCRIPT_DIR="/opt/pyscripts"
 PERL = "/usr/bin/perl"
 UPLOAD_KEY = "/keys/UCSC_PAWG.key"
+
+REPO_SERVER='https://cghub.ucsc.edu'
+
 
 def run_command(command=str, cwd=None):
     print "Running: %s" % (command)
@@ -96,9 +101,9 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NO
     #check submission state    
     try:
         if debug:
-            cmd = "curl -sk https://stage.cghub.ucsc.edu/cghub/metadata/analysisDetail?analysis_id=%s | egrep -ie '<state>' | cut -d'>' -f 2 | cut -d\"<\" -f 1" % (NEW_UUID)
+            cmd = "curl -sk %s/cghub/metadata/analysisDetail?analysis_id=%s | egrep -ie '<state>' | cut -d'>' -f 2 | cut -d\"<\" -f 1" % (REPO_SERVER,NEW_UUID)
         else:
-            cmd = "curl -sk https://cghub.ucsc.edu/cghub/metadata/analysisDetail?analysis_id=%s | egrep -ie '<state>' | cut -d'>' -f 2 | cut -d\"<\" -f 1" % (NEW_UUID)
+            cmd = "curl -sk %s/cghub/metadata/analysisDetail?analysis_id=%s | egrep -ie '<state>' | cut -d'>' -f 2 | cut -d\"<\" -f 1" % (REPO_SERVER,NEW_UUID)
         (state,stderr)=run_command(cmd, SUB_DIR)
         state = state.rstrip()
     except CalledProcessError as cpe:
@@ -106,11 +111,11 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NO
         raise cpe
 
     #not submitted yet
-    #if ( state is None or state == "" ) and not os.path.exists( os.path.join(SUB_DIR,"MD_DONE") ):
-    if not os.path.exists( os.path.join(SUB_DIR,"SUBMIT_DONE") ):
+    if ( state is None or state == "" ) and not os.path.exists( os.path.join(SUB_DIR,"SUBMIT_DONE") ):
+    #if not os.path.exists( os.path.join(SUB_DIR,"SUBMIT_DONE") ):
         try:
             if debug:
-                cmd = "%s %s/cgsubmit -s https://stage.cghub.ucsc.edu -c %s -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,DEBUG_UPLOAD_KEY,NEW_UUID)
+                cmd = "%s %s/cgsubmit -s %s -c %s -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,REPO_SERVER,DEBUG_UPLOAD_KEY,NEW_UUID)
             else:
                 cmd = "cgsubmit -c %s -u %s" % (UPLOAD_KEY,NEW_UUID)
             (stdout,stderr)=run_command(cmd, SUB_DIR)
@@ -126,7 +131,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NO
     elif not os.path.exists( os.path.join(SUB_DIR,NEW_UUID,"manifest.xml") ):
         try:
             if debug:
-                cmd = "%s %s/cgsubmit -s https://stage.cghub.ucsc.edu --validate-only -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,NEW_UUID)
+                cmd = "%s %s/cgsubmit -s %s --validate-only -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,REPO_SERVER,NEW_UUID)
             else:
                 cmd = "cgsubmit --validate-only -u %s" % (NEW_UUID)
             (stdout,stderr)=run_command(cmd, SUB_DIR)
@@ -134,11 +139,12 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NO
             sys.stderr.write("CGHub metadata submission manifest recreation error\n")
             raise cpe
         #must also delete any existing gto files
-        try:
-            run_command("rm %s" % (os.path.join(SUB_DIR,NEW_UUID,"*.gto*")))
-        except CalledProcessError as cpe:
-            sys.stderr.write("CGHub gto deletion error\n")
-            raise cpe
+        if os.path.exists(os.path.join(SUB_DIR,NEW_UUID,"%s.gto" % NEW_UUID)) or os.path.exists(os.path.join(SUB_DIR,NEW_UUID,"%s.gto.progress" % NEW_UUID)):
+            try:
+                run_command("rm %s" % (os.path.join(SUB_DIR,NEW_UUID,"*.gto*")))
+            except CalledProcessError as cpe:
+                sys.stderr.write("CGHub gto deletion error\n")
+                raise cpe
 
     #try to upload if in the right (or non-existent) state 
     if state is None or state == "" or state == "submitted" or state == "uploading":
