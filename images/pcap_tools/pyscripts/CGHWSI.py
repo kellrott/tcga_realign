@@ -15,8 +15,9 @@ import pprint
 UUID_FORMAT='([a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})'
 #CGHUB_ANALYSIS_ATTR_URL='https://cghub.ucsc.edu/cghub/metadata/analysisAttributes'
 #CGHUB_ANALYSIS_OBJECT_URL='https://cghub.ucsc.edu/cghub/metadata/analysisObject'
-CGHUB_ANALYSIS_ATTR_URL='https://stage.cghub.ucsc.edu/cghub/metadata/analysisFull'
-CGHUB_ANALYSIS_OBJECT_URL='https://stage.cghub.ucsc.edu/cghub/metadata/analysisDetail'
+#CGHUB_ANALYSIS_ATTR_URL='https://stage.cghub.ucsc.edu/cghub/metadata/analysisFull'
+CGHUB_ANALYSIS_ATTR_URL='https://cghub.ucsc.edu/cghub/metadata/analysisFull'
+CGHUB_ANALYSIS_OBJECT_URL='https://cghub.ucsc.edu/cghub/metadata/analysisDetail'
 CGHUB_ROOT_TAGS=['ANALYSIS','RUN','EXPERIMENT']
 
 
