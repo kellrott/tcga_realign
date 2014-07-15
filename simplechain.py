@@ -20,6 +20,7 @@ import logging
 import traceback
 import subprocess
 import multiprocessing
+import tarfile
 
 logging.basicConfig(level=logging.INFO)
 
@@ -239,20 +240,60 @@ def run_resume(args):
 
 def run_build(args):
 
-    if args.image is None:
-        images = glob(os.path.join(args.dir, "*"))
+    if args.src is None:
+        srcs = glob(os.path.join(args.dir, "*"))
     else:
-        images = [ os.path.join(args.dir, args.image) ]
+        srcs = [ os.path.join(args.dir, args.src) ]
 
-    for image_dir in images:
-        image_name = os.path.basename(image_dir)
+    for src_dir in srcs:
+        src_name = os.path.basename(src_dir)
         if args.flush:
-            cmd = "docker build --no-cache -t %s %s" % (image_name, image_dir)
+            cmd = "docker build --no-cache -t %s %s" % (src_name, src_dir)
         else:
-            cmd = "docker build -t %s %s" % (image_name, image_dir)
+            cmd = "docker build -t %s %s" % (src_name, src_dir)
         if not args.skip_sudo:
             cmd = "sudo " + cmd
         subprocess.check_call(cmd, shell=True)
+        
+        if args.out is not None:
+            cmd = "docker save %s > %s.tar" % (src_name, os.path.join(args.out, src_name))
+            if not args.skip_sudo:
+                cmd = "sudo " + cmd
+            subprocess.check_call(cmd, shell=True)
+
+def run_install(args):
+    if args.src is None:
+        srcs = glob(os.path.join(args.dir, "*"))
+    else:
+        srcs = [ os.path.join(args.dir, args.src) ]
+
+    for src_tar in srcs:
+        src_name = re.sub(r'.tar$', '', os.path.basename(src_tar))
+        t = tarfile.TarFile(src_tar)
+        meta_str = t.extractfile('repositories').read()
+        meta = json.loads(meta_str)
+   
+        cmd = "docker images --no-trunc"
+        if not args.skip_sudo:
+            cmd = "sudo " + cmd
+        proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+        stdo, stde = proc.communicate()
+        tag, tag_value = meta.items()[0]
+        rev, rev_value = tag_value.items()[0]
+        found = False
+        for line in stdo.split("\n"):
+            tmp = re.split(r'\s+', line)
+            if tmp[0] == tag and tmp[1] == rev and tmp[2] == rev_value:
+                found = True
+        if not found:
+            print "Installing %s" % (src_name)
+            cmd = "docker load"
+            if not args.skip_sudo:
+                cmd = "sudo " + cmd
+            cmd = "cat %s | %s" % (src_tar, cmd)
+            subprocess.check_call(cmd, shell=True)
+        else:
+            print "Already Installed: %s" % (src_name)
 
 def func_run(q, func, params):
     out = []
@@ -320,8 +361,6 @@ def run_exec(args):
                      o = q.get()
                      files.extend(o)
                      p.join()
-
-
             except:
                 with open(finaldir + ".error", "w") as err_handle:
                     traceback.print_exc(file=err_handle)
@@ -337,7 +376,6 @@ def run_exec(args):
                 shutil.move(params['outdir'], workdir)
             with open(os.path.join(args.outdir, args.id, name + ".output"), "w") as handle:
                 handle.write(json.dumps(files))
-
 
         else:
             if name in params_merge:
@@ -404,11 +442,19 @@ if __name__ == "__main__":
     parser_resume.set_defaults(func=run_resume)
 
     parser_build = subparsers.add_parser('build')
-    parser_build.add_argument("--dir", default="images")
-    parser_build.add_argument("--image", default=None)
+    parser_build.add_argument("--dir", default="dockers")
+    parser_build.add_argument("--src", default=None)
     parser_build.add_argument("--skip-sudo", action="store_true", default=False)
     parser_build.add_argument("-f", "--flush", action="store_true", default=False)
+    parser_build.add_argument("-o", "--out", default=None)   
     parser_build.set_defaults(func=run_build)
+
+    parser_install = subparsers.add_parser('install')
+    parser_install.add_argument("--dir", default="images")
+    parser_install.add_argument("--src", default=None)
+    parser_install.add_argument("--skip-sudo", action="store_true", default=False)
+    parser_install.set_defaults(func=run_install)
+
 
     parser_exec = subparsers.add_parser('exec')
     parser_exec.add_argument("pipeline")
