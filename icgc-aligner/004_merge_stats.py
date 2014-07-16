@@ -23,18 +23,18 @@ def run_normal(params):
 	cmd = string.Template(MARKDUP).substitute(dict(params, OUTFILE="PAWG.%s.bam" % (params['normal_id']), METRICS_FILE="%s.markdup.metrics" % (params['normal_id']), TMPBASE="tmp_normal"))
 	for i in params['unaligned_normal_bams']:
 		cmd += " I=%s" % (params[i+":aligned_bam"])
-	timing("%s_merge" % params[i+":aligned_bam"])
+	timing("%s_merge" % "PAWG.%s.bam"])
 	subprocess.check_call(cmd, shell=True)
-	timing("%s_merge" % params[i+":aligned_bam"])
+	timing("%s_merge" % "PAWG.%s.bam"])
 	yield ("normal_merged", "PAWG.%s.bam" % (params['normal_id']))
 
 def run_tumor(params):
 	cmd = string.Template(MARKDUP).substitute(dict(params, OUTFILE="PAWG.%s.bam" % (params['tumor_id']), METRICS_FILE="%s.markdup.metrics" % (params['tumor_id']), TMPBASE="tmp_tumor"))
 	for i in params['unaligned_tumor_bams']:
 		cmd += " I=%s" % (params[i+":aligned_bam"])
-	timing("%s_merge" % params[i+":aligned_bam"])
+	timing("%s_merge" % "PAWG.%s.bam"])
 	subprocess.check_call(cmd, shell=True)
-	timing("%s_merge" % params[i+":aligned_bam"])
+	timing("%s_merge" % "PAWG.%s.bam"])
 	yield ("tumor_merged", "PAWG.%s.bam" % (params['tumor_id']))
 
 
