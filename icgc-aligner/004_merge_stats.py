@@ -88,25 +88,23 @@ def merge_steps(params):
 		os.mkdir("tumor")
 	for rg in params['unaligned_tumor_bams']:
 		input_path = params[rg + ":aligned_bam"]
-		output_path =  os.path.join("tumor",input_name)
-		timing("%s_qc" % output_path)
+		timing("%s_qc" % input_path)
 		o = BAMStats(rg, "tumor")
 		yield o.run
 		v = OICRVerification(rg, "tumor")
 		yield v.run
-		timing("%s_qc" % output_path)
+		timing("%s_qc" % input_path)
 
 	if not os.path.exists("normal"):
 		os.mkdir("normal")
 	for rg in params['unaligned_normal_bams']:
 		input_path = params[rg + ":aligned_bam"]
-		output_path =  os.path.join("normal",input_name)
-		timing("%s_qc" % output_path)
+		timing("%s_qc" % input_path)
 		o = BAMStats(rg, "normal")
 		yield o.run
 		v = OICRVerification(rg, "normal")
 		yield v.run
-		timing("%s_qc" % output_path)
+		timing("%s_qc" % input_path)
 
 STEPS=merge_steps
 RESUME=False
