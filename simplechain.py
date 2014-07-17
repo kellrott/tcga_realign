@@ -78,7 +78,8 @@ def run_pipeline(args):
     modules = get_modules(args)
     for m in modules:
         name = os.path.basename(m).replace(".py", "")
-
+        stage = int(os.path.basename(m).split("_")[0])
+                    
         #get the names of the working directory and the final output directory
         workdir = os.path.abspath(os.path.join(args.workdir,args.id, name))
         finaldir = os.path.abspath(os.path.join(args.outdir,args.id, name))
@@ -90,6 +91,9 @@ def run_pipeline(args):
 
         #check for existing results
         if not os.path.exists(finaldir) and not os.path.exists(workdir):
+            if args.stages is not None and stage not in args.stages:
+                logging.info("Stopping at Stage %s" % (name))
+                return 0
             logging.info("Results for %s run for %s not found" % (args.id, name))
 
             files = []
@@ -402,6 +406,8 @@ if __name__ == "__main__":
     parser_run.add_argument("--ncpus", default="8")
     parser_run.add_argument("--data", action="append")
     parser_run.add_argument("--docker", action="store_true", default=False)
+    parser_run.add_argument("-s", "--stage", action="append", type=int)
+    
 
     parser_run.add_argument("pipeline")
     parser_run.add_argument("workfile")
