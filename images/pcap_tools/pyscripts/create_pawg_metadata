@@ -133,7 +133,7 @@ def extract_pipeline_sections_from_bam_header(filename):
     #(stdout,stderr)=run_command(["samtools","view","-H",filename])
     id_matcher = re.compile("ID:([^\s]+)")
     pn_matcher = re.compile("PN:([^\t]+)")
-    cl_matcher = re.compile("CL:([^\t]+)")
+    cl_matcher = re.compile("CL:[\w\/]+\/([^\t]+)")
     version_matcher = re.compile("VN:([^\t]+)")
     matchers = [["STEP_INDEX",id_matcher],["PROGRAM",pn_matcher],["VERSION",version_matcher],["NOTES",cl_matcher]]
     bad_tab_matcher = re.compile("\\t")
@@ -160,7 +160,8 @@ def extract_pipeline_sections_from_bam_header(filename):
             e.set("section_name","Mapping")
             previous_step_idx="NIL"
         if markdups_matcher.search(line) != None:
-            previous_step_idx="NIL"
+            e.set("section_name","Markduplicates")
+            previous_step_idx="bamsort"
         index=0
         for matcher_ in matchers:
             (tag,matcher)=matcher_
@@ -171,6 +172,11 @@ def extract_pipeline_sections_from_bam_header(filename):
                 #put back bad tabs
                 if BAD_TABS:
                     info=info.replace("    ","\\t")
+                if tag == 'STEP_INDEX' and previous_step_idx == "bamsort":
+                    info = 'markduplicates'
+                if tag == 'NOTES' and previous_step_idx == "markduplicates":
+                    info_ = "[NOTE: bammarkduplicates is one of the programs in the biobambam BAM processing package and in addition to marking duplicates it merges all individual read group bams into one final bam] %s" % info
+                    info = info_
                 t.text=(info)
                 #put in the previous pointer tag if this is the first (STEP_INDEX) tag for this PIPE_SECTION
                 if index == 0:
