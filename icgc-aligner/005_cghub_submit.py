@@ -9,7 +9,7 @@ import os
 #just for initial debug, these will be filled in by the conf read
 #used currently primarily to test different paths, the destination repo server and study is the same (cghub prod:PCAWG_TEST)
 DEBUG_PYTHON="/pod/opt/bin/python"
-DEBUG_SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_merged/images/pcap_tools/pyscripts"
+DEBUG_SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_merged/dockers/pcap_tools/pyscripts"
 #DEBUG_UPLOAD_KEY="/pod/home/cwilks/JOSH_PAWG_stage.key"
 DEBUG_UPLOAD_KEY="/pod/home/cwilks/UCSC_PAWG.key"
 DEBUG_PERL="/pod/home/cwilks/p/myperl/perl"
@@ -225,8 +225,8 @@ def main():
 
     cghub_submit(UUID='%s' % TEST_UUID,
                  #NEW_UUID='d3afc141-bd34-41a5-bbab-4a65c3b0ec27',
-                 #NEW_UUID='c48a703e-48bd-4a6a-8948-c64f87c9cb82',
-                 NEW_UUID='c401159c-75ac-411a-bc74-4b9eaae5fd56', 
+                 NEW_UUID='c48a703e-48bd-4a6a-8948-c64f87c9cb82',
+                 #NEW_UUID='c401159c-75ac-411a-bc74-4b9eaae5fd56', 
                  #NEW_UUID='d3d3aa8d-fab4-43e4-83c9-6102cdaf4ab1',
                  #NEW_UUID='b8acbf32-0867-488a-a4d9-984a33345536',
                  #NEW_UUID='e62e9cf6-c04c-4a3b-bf27-df43845ff6c7',
