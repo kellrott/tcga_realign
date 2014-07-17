@@ -16,7 +16,7 @@ my $input_read_count_file;
 GetOptions (
   "header-file=s" => \$header_file,
   "bas-file=s" => \$bas_file,
-  "input-read-count-file=s" => \$input_read_count_file,
+  "input-read-count-file=s" => \$input_read_count_file
 );
 
 my $rg_header = &parse_header_file($header_file);
@@ -26,12 +26,12 @@ chomp $input_read_count;
 
 # now let's compare read group information from these two files
 
-unless (scalar keys $rg_header == scalar keys $rg_bas) { # first ensure read group counts match
+unless (scalar keys %$rg_header == scalar keys %$rg_bas) { # first ensure read group counts match
   die "Read group counts unmatch between files: $rg_header and $rg_bas\n";
 }
 
 my $read_count_after_bwa = 0;
-for (keys $rg_header) {
+for (keys %$rg_header) {
   my $rg_id = $_;
 
   die "Read group $rg_id exists in header file: $header_file, but is missing in bas file: $bas_file\n"
@@ -72,7 +72,7 @@ sub parse_header_file {
     next unless /^\@RG/;
     s/[\r\n]//g;
 
-    if (/\\tID:(.+?)\\t/ || /\\tID:(.+?)\z/) {
+    if (/\tID:(.+?)\t/ || /\tID:(.+?)\z/) {
       $current_rg_id = $1;
 
       die "None unique Read Group ID (or RG ID field appeared more than once in one BAM header line) found in header file: $header_file\n"
@@ -82,7 +82,7 @@ sub parse_header_file {
       die "No ID field defined (or ID is empty) in the \@RG header line in header file: $header_file\n";
     }
   
-    my @F = split /\\t/, $_, -1;
+    my @F = split /\t/, $_, -1;
   
     for (@F) {
       next if /^\@RG/;

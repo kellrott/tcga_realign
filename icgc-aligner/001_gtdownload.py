@@ -34,7 +34,9 @@ def gtdownload(params):
 		normal_bam = a
 
 	yield ("tumor_bam", tumor_bam)
+	yield ("tumor_download_timing","%s_download_timing.txt" % params['tumor_id'])
 	yield ("normal_bam", normal_bam)
+	yield ("normal_download_timing","%s_download_timing.txt" % params['normal_id'])
 
 
 
