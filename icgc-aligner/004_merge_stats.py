@@ -23,19 +23,21 @@ def run_normal(params):
 	cmd = string.Template(MARKDUP).substitute(dict(params, OUTFILE="PAWG.%s.bam" % (params['normal_id']), METRICS_FILE="%s.markdup.metrics" % (params['normal_id']), TMPBASE="tmp_normal"))
 	for i in params['unaligned_normal_bams']:
 		cmd += " I=%s" % (params[i+":aligned_bam"])
-	timing("%s_merge" % params[i+":aligned_bam"])
+	timing("%s_merge" % "PAWG.%s.bam"])
 	subprocess.check_call(cmd, shell=True)
-	timing("%s_merge" % params[i+":aligned_bam"])
+	timing("%s_merge" % "PAWG.%s.bam"])
 	yield ("normal_merged", "PAWG.%s.bam" % (params['normal_id']))
+	yield ("normal_merged_metrics", "%s.markdup.metrics" % (params['normal_id']))
 
 def run_tumor(params):
 	cmd = string.Template(MARKDUP).substitute(dict(params, OUTFILE="PAWG.%s.bam" % (params['tumor_id']), METRICS_FILE="%s.markdup.metrics" % (params['tumor_id']), TMPBASE="tmp_tumor"))
 	for i in params['unaligned_tumor_bams']:
 		cmd += " I=%s" % (params[i+":aligned_bam"])
-	timing("%s_merge" % params[i+":aligned_bam"])
+	timing("%s_merge" % "PAWG.%s.bam"])
 	subprocess.check_call(cmd, shell=True)
-	timing("%s_merge" % params[i+":aligned_bam"])
+	timing("%s_merge" % "PAWG.%s.bam"])
 	yield ("tumor_merged", "PAWG.%s.bam" % (params['tumor_id']))
+	yield ("tumor_merged_metrics", "%s.markdup.metrics" % (params['tumor_id']))
 
 
 class BAMStats:
@@ -88,25 +90,23 @@ def merge_steps(params):
 		os.mkdir("tumor")
 	for rg in params['unaligned_tumor_bams']:
 		input_path = params[rg + ":aligned_bam"]
-		output_path =  os.path.join("tumor",input_name)
-		timing("%s_qc" % output_path)
+		timing("%s_qc" % input_path)
 		o = BAMStats(rg, "tumor")
 		yield o.run
 		v = OICRVerification(rg, "tumor")
 		yield v.run
-		timing("%s_qc" % output_path)
+		timing("%s_qc" % input_path)
 
 	if not os.path.exists("normal"):
 		os.mkdir("normal")
 	for rg in params['unaligned_normal_bams']:
 		input_path = params[rg + ":aligned_bam"]
-		output_path =  os.path.join("normal",input_name)
-		timing("%s_qc" % output_path)
+		timing("%s_qc" % input_path)
 		o = BAMStats(rg, "normal")
 		yield o.run
 		v = OICRVerification(rg, "normal")
 		yield v.run
-		timing("%s_qc" % output_path)
+		timing("%s_qc" % input_path)
 
 STEPS=merge_steps
 RESUME=False

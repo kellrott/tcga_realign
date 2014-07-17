@@ -43,7 +43,9 @@ def main(args):
 	work_dir = tempfile.mkdtemp(dir=args.workdir, prefix="bwa_mem_")
 
 	#need this for later, for the metrics/stats inclusion in the metadata, it may also behoove us to put this as the rgline
-	header_cmd = "samtools view -H %s | perl -nae 'next unless /^\@RG/; s/\tPI:\s*\t/\t/; s/\tPI:\s*\z/\n/; s/\t/\\\t/g; print' > %s.header.txt" % (args.inbam,args.inbam)
+	#header_cmd = "samtools view -H %s | perl -nae 'next unless /^\@RG/; s/\tPI:\s*\t/\t/; s/\tPI:\s*\z/\n/; s/\t/\\\t/g; print' > %s.header.txt" % (args.inbam,args.inbam)
+	#don't do the \t to \\\t translation, not needed at this point messes up the verification step
+	header_cmd = "samtools view -H %s | perl -nae 'next unless /^\@RG/; s/\tPI:\s*\t/\t/; s/\tPI:\s*\z/\n/; print' > %s.header.txt" % (args.inbam,args.inbam)
 
 	run_command(header_cmd)
 

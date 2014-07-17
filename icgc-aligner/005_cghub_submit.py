@@ -9,7 +9,7 @@ import os
 #just for initial debug, these will be filled in by the conf read
 #used currently primarily to test different paths, the destination repo server and study is the same (cghub prod:PCAWG_TEST)
 DEBUG_PYTHON="/pod/opt/bin/python"
-DEBUG_SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_merged/images/pcap_tools/pyscripts"
+DEBUG_SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_merged/dockers/pcap_tools/pyscripts"
 #DEBUG_UPLOAD_KEY="/pod/home/cwilks/JOSH_PAWG_stage.key"
 DEBUG_UPLOAD_KEY="/pod/home/cwilks/UCSC_PAWG.key"
 DEBUG_PERL="/pod/home/cwilks/p/myperl/perl"
@@ -33,8 +33,12 @@ def run_command(command=str, cwd=None):
         raise CalledProcessError(run.returncode,stderr)
     return (stdout,stderr)
 
-def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NORMAL_UUID, NEW_NORMAL_UUID, UPLOAD_KEY, debug=False):
-
+#def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NORMAL_UUID, NEW_NORMAL_UUID, UPLOAD_KEY, mode, params, debug=False):
+def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_NORMAL_UUID, UPLOAD_KEY, mode, params, debug=False):
+    
+    download_timing = params["%s_download_timing" % mode]
+    merged_metrics = params["%s_merged_metrics" % mode]
+    merged_timing = "%s_merge_timing.txt" % BAM_FILE
     #the submission directory
     CWD=os.getcwd()
     SUB_DIR="%s/%s.partial"%(CWD,UUID)
@@ -86,9 +90,10 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NO
         #add the QC metrics to the metadata
         try:
             if debug:
-                cmd = "%s %s/add_qc_results_to_metadata.pl %s/%s/analysis.xml %s" % (DEBUG_PERL,DEBUG_SCRIPT_DIR,SUB_DIR,NEW_UUID,QC_STATS_FILE)
+                #cmd = "%s %s/add_qc_results_to_metadata.pl %s/%s/analysis.xml %s" % (DEBUG_PERL,DEBUG_SCRIPT_DIR,SUB_DIR,NEW_UUID,QC_STATS_FILE)
+                cmd = "%s %s/add_qc_results_to_metadata.pl %s/%s/analysis.xml %s/%s %s %s %s %s" % (DEBUG_PERL,DEBUG_SCRIPT_DIR,SUB_DIR,NEW_UUID,params["debug_path"],mode,UUID,download_timing,merged_metrics,merged_timing)
             else:
-                cmd = "%s add_qc_results_to_metadata.pl %s/%s/analysis.xml %s" % (SUB_DIR,NEW_UUID,QC_STATS_FILE)
+                cmd = "add_qc_results_to_metadata.pl %s/%s/analysis.xml %s %s %s %s %s" % (SUB_DIR,NEW_UUID,mode,UUID,download_timing,merged_metrics,merged_timing)
             (stdout,stderr)=run_command(cmd)
         except CalledProcessError as cpe:
             sys.stderr.write("CGHub QC stats/ICGC fields addition to metadata error\n")
@@ -131,6 +136,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NO
     elif not os.path.exists( os.path.join(SUB_DIR,NEW_UUID,"manifest.xml") ):
         try:
             if debug:
+                #return
                 cmd = "%s %s/cgsubmit -s %s --validate-only -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,REPO_SERVER,NEW_UUID)
             else:
                 cmd = "cgsubmit --validate-only -u %s" % (NEW_UUID)
@@ -175,33 +181,65 @@ def cghub_submit_normal(params):
         BAM_FILE=params['normal_merged'],
         MD5=params['normal_merged'] + ".md5",
         UPLOAD_KEY=UPLOAD_KEY,
-        QC_STATS_FILE=bas_file,
+        #QC_STATS_FILE=bas_file,
+        mode="normal",
+        params=params,
+        debug=True)
+
+def cghub_submit_tumor(params):
+    bas_file = "PCAWG.%s.bas" % ( params['tumor_id'] )
+    cghub_submit(UUID=params['tumor_id'], 
+        NEW_UUID=params['new_tumor_id'],
+        NORMAL_UUID=params['tumor_id'],
+        NEW_NORMAL_UUID=params['new_tumor_id'],
+        ORIG_BAM_FILE=params['tumor_bam'], 
+        BAM_FILE=params['tumor_merged'],
+        MD5=params['tumor_merged'] + ".md5",
+        UPLOAD_KEY=UPLOAD_KEY,
+        mode="tumor",
+        params=params,
         debug=True)
 
 
 
 #STEPS=[realigned_bam_check,create_pawg_metadata,cgsubmit,gtupload]
-STEPS=[cghub_submit_normal]
+STEPS=[cghub_submit_normal,cghub_submit_tumor]
 RESUME=True
 STORE=False
 IMAGE="pcap_tools"
 
 def main():
-    #ONLY USE test (non-protected) data with debug as it will upload to stage 
-    cghub_submit(UUID='251916ec-f78e-4eae-99fe-ff802e3ce2fe',
+    #TEST_UUID='251916ec-f78e-4eae-99fe-ff802e3ce2fe'
+    #this uuid is REAL tcga data, so only upload to production
+    TEST_UUID='9b6cd038-dee8-47b3-bd30-9a361a1f39ae'
+    path = "/pod/home/cwilks/p/output/%s" % TEST_UUID
+    BAM_FILE='/pod/home/cwilks/p/output/%s/%s.bam' % (TEST_UUID,TEST_UUID)
+    mode = 'normal'
+
+    params = {}
+    params["debug_path"] = path
+    #params[rg1+":aligned_bam"] = "/pod/home/cwilks/p/output/%s/out_%s.bam" % (TEST_UUID,rg1)
+    #params["%s_merged" % mode] = BAM_FILE
+    params["%s_download_timing" % mode] = "%s/%s_download_timing.txt" % (path,TEST_UUID)
+    params["%s_merged_metrics" % mode] = "%s/%s.markdup.metrics" % (path,TEST_UUID)
+
+    cghub_submit(UUID='%s' % TEST_UUID,
                  #NEW_UUID='d3afc141-bd34-41a5-bbab-4a65c3b0ec27',
-                 #NEW_UUID='c48a703e-48bd-4a6a-8948-c64f87c9cb82',
+                 NEW_UUID='c48a703e-48bd-4a6a-8948-c64f87c9cb82',
+                 #NEW_UUID='c401159c-75ac-411a-bc74-4b9eaae5fd56', 
                  #NEW_UUID='d3d3aa8d-fab4-43e4-83c9-6102cdaf4ab1',
                  #NEW_UUID='b8acbf32-0867-488a-a4d9-984a33345536',
                  #NEW_UUID='e62e9cf6-c04c-4a3b-bf27-df43845ff6c7',
-                 NEW_UUID='266cec33-e253-41c9-9e1a-2a00205acd0a',
+                 #NEW_UUID='266cec33-e253-41c9-9e1a-2a00205acd0a',
                  NORMAL_UUID='a0963407-05e7-4c84-bfe0-34aacac08eed',
                  NEW_NORMAL_UUID='97112394-e3e6-4bf4-b4a6-6251fd80c711',
-                 ORIG_BAM_FILE='/pod/home/cwilks/p/input/251916ec-f78e-4eae-99fe-ff802e3ce2fe/251916ec-f78e-4eae-99fe-ff802e3ce2fe.bam',
-                 BAM_FILE='/pod/home/cwilks/p/output/251916ec-f78e-4eae-99fe-ff802e3ce2fe/251916ec-f78e-4eae-99fe-ff802e3ce2fe.bam',
-                 MD5='/pod/home/cwilks/p/output/251916ec-f78e-4eae-99fe-ff802e3ce2fe/251916ec-f78e-4eae-99fe-ff802e3ce2fe.bam.md5',
-                 QC_STATS_FILE='/pod/home/cwilks/p/output/251916ec-f78e-4eae-99fe-ff802e3ce2fe/251916ec-f78e-4eae-99fe-ff802e3ce2fe.bam.bas',
+                 ORIG_BAM_FILE='/pod/home/cwilks/p/input/%s/%s.bam' % (TEST_UUID,TEST_UUID),
+                 BAM_FILE=BAM_FILE,
+                 MD5='/pod/home/cwilks/p/output/%s/%s.bam.md5' % (TEST_UUID,TEST_UUID),
+                 #QC_STATS_FILE='/pod/home/cwilks/p/output/%s/%s.bam.bas' % (TEST_UUID,TEST_UUID),
                  UPLOAD_KEY=UPLOAD_KEY,
+                 mode=mode,
+                 params=params,
                  debug=True)
 
 
