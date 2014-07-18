@@ -40,7 +40,7 @@ def run_tumor(params):
 	yield ("tumor_merged_metrics", "%s.markdup.metrics" % (params['tumor_id']))
 
 
-class BAMStats:
+class BAMStatsAndVerify:
 	def __init__(self, input_name, mode):
 		self.input_name = input_name
 		self.mode = mode
@@ -55,19 +55,10 @@ class BAMStats:
 		)
 		print "calling", cmd
 		subprocess.check_call(cmd, shell=True)
-		yield (self.input_name + ":aligned_stats", output_path)
-
-
-class OICRVerification:
-
-	def __init__(self, inut_name, mode):
-		self.input_name = intput_name
-		self.mode = mode
-
-	def run(self, params):
+		
 		input_path = params[self.input_name + ":file"]
 		header_path = "%s.header.txt" % input_path
-		stats_path = params[self.input_name + ":aligned_stats"]
+		stats_path = output_path
 		counts_path =  "%s.count.txt" % input_path
 		
 		#verify_read_groups.pl --header-file bam_header." + i + ".txt" + " --bas-file out" + i + ".bam.stats.txt" + " --input-read-count-file inputbam" + i + ".count.txt"
@@ -80,6 +71,8 @@ class OICRVerification:
 		#subprocess.check_call(cmd, shell=True)
 		#this will die (and then raise an exception) if the verification fails at any point
 		(stdout,stderr)=run_command(cmd)
+	
+		yield (self.input_name + ":aligned_stats", output_path)
 
 
 def merge_steps(params):
@@ -91,10 +84,8 @@ def merge_steps(params):
 	for rg in params['unaligned_tumor_bams']:
 		input_path = params[rg + ":aligned_bam"]
 		timing("%s_qc" % input_path)
-		o = BAMStats(rg, "tumor")
+		o = BAMStatsAndVerify(rg, "tumor")
 		yield o.run
-		v = OICRVerification(rg, "tumor")
-		yield v.run
 		timing("%s_qc" % input_path)
 
 	if not os.path.exists("normal"):
@@ -102,10 +93,8 @@ def merge_steps(params):
 	for rg in params['unaligned_normal_bams']:
 		input_path = params[rg + ":aligned_bam"]
 		timing("%s_qc" % input_path)
-		o = BAMStats(rg, "normal")
+		o = BAMStatsAndVerify(rg, "normal")
 		yield o.run
-		v = OICRVerification(rg, "normal")
-		yield v.run
 		timing("%s_qc" % input_path)
 
 STEPS=merge_steps

@@ -8,7 +8,7 @@ import os
     
 #just for initial debug, these will be filled in by the conf read
 #used currently primarily to test different paths, the destination repo server and study is the same (cghub prod:PCAWG_TEST)
-DEBUG_PYTHON="/pod/opt/bin/python"
+DEBUG_PYTHON="/pod/opt/bin/python" 
 DEBUG_SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_merged/dockers/pcap_tools/pyscripts"
 #DEBUG_UPLOAD_KEY="/pod/home/cwilks/JOSH_PAWG_stage.key"
 DEBUG_UPLOAD_KEY="/pod/home/cwilks/UCSC_PAWG.key"
@@ -171,7 +171,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     #print "finishing with the rename"        
     os.rename(SUB_DIR,FIN_DIR)
 
-def cghub_submit_normal(params):
+def cghub_submit_both(params):
     bas_file = "PCAWG.%s.bas" % ( params['normal_id'] )
     cghub_submit(UUID=params['normal_id'], 
         NEW_UUID=params['new_normal_id'],
@@ -183,10 +183,8 @@ def cghub_submit_normal(params):
         UPLOAD_KEY=UPLOAD_KEY,
         #QC_STATS_FILE=bas_file,
         mode="normal",
-        params=params,
-        debug=True)
+        params=params)
 
-def cghub_submit_tumor(params):
     bas_file = "PCAWG.%s.bas" % ( params['tumor_id'] )
     cghub_submit(UUID=params['tumor_id'], 
         NEW_UUID=params['new_tumor_id'],
@@ -197,13 +195,13 @@ def cghub_submit_tumor(params):
         MD5=params['tumor_merged'] + ".md5",
         UPLOAD_KEY=UPLOAD_KEY,
         mode="tumor",
-        params=params,
-        debug=True)
+        params=params)
 
 
 
 #STEPS=[realigned_bam_check,create_pawg_metadata,cgsubmit,gtupload]
-STEPS=[cghub_submit_normal,cghub_submit_tumor]
+#STEPS=[cghub_submit_normal,cghub_submit_tumor] #can't do it in parallel because cgsubmit creates a fixed temp directory
+STEPS=[cghub_submit_both] 
 RESUME=True
 STORE=False
 IMAGE="pcap_tools"
