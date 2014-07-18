@@ -120,9 +120,9 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     #if not os.path.exists( os.path.join(SUB_DIR,"SUBMIT_DONE") ):
         try:
             if debug:
-                cmd = "%s %s/cgsubmit -s %s -c %s -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,REPO_SERVER,DEBUG_UPLOAD_KEY,NEW_UUID)
+                cmd = "%s %s/cgsubmit_fixed -s %s -c %s -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,REPO_SERVER,DEBUG_UPLOAD_KEY,NEW_UUID)
             else:
-                cmd = "cgsubmit -c %s -u %s" % (UPLOAD_KEY,NEW_UUID)
+                cmd = "cgsubmit_fixed -c %s -u %s" % (UPLOAD_KEY,NEW_UUID)
             (stdout,stderr)=run_command(cmd, SUB_DIR)
         except CalledProcessError as cpe:
             sys.stderr.write("CGHub metadata submission error\n")
@@ -137,9 +137,9 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
         try:
             if debug:
                 #return
-                cmd = "%s %s/cgsubmit -s %s --validate-only -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,REPO_SERVER,NEW_UUID)
+                cmd = "%s %s/cgsubmit_fixed -s %s --validate-only -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,REPO_SERVER,NEW_UUID)
             else:
-                cmd = "cgsubmit --validate-only -u %s" % (NEW_UUID)
+                cmd = "cgsubmit_fixed --validate-only -u %s" % (NEW_UUID)
             (stdout,stderr)=run_command(cmd, SUB_DIR)
         except CalledProcessError as cpe:
             sys.stderr.write("CGHub metadata submission manifest recreation error\n")
@@ -224,8 +224,8 @@ def main():
     params["%s_merged_metrics" % mode] = "%s/%s.markdup.metrics" % (path,TEST_UUID)
 
     cghub_submit(UUID='%s' % TEST_UUID,
-                 #NEW_UUID='d3afc141-bd34-41a5-bbab-4a65c3b0ec27',
-                 NEW_UUID='c48a703e-48bd-4a6a-8948-c64f87c9cb82',
+                 NEW_UUID='d3afc141-bd34-41a5-bbab-4a65c3b0ec27',
+                 #NEW_UUID='c48a703e-48bd-4a6a-8948-c64f87c9cb82',
                  #NEW_UUID='c401159c-75ac-411a-bc74-4b9eaae5fd56', 
                  #NEW_UUID='d3d3aa8d-fab4-43e4-83c9-6102cdaf4ab1',
                  #NEW_UUID='b8acbf32-0867-488a-a4d9-984a33345536',
