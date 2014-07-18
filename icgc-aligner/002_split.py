@@ -1,5 +1,6 @@
 
 
+import re
 import subprocess
 import string
 from glob import glob
@@ -13,7 +14,11 @@ def do_normal_split(params):
 	subprocess.check_call(cmd, shell=True)
 	names = []
 	for bam in glob("normal/*.bam"):
-		n = os.path.basename(bam)
+		base = os.path.basename(bam)
+		#the naming pattern is <uuid>_<readgroup>.cleaned.bam
+		n = re.sub(r'........-....-....-....-............_(.*).cleaned.bam', r'\1', base)
+		if n is None or len(n) == 0:
+			n = base
 		yield (n + ":file", bam)
 		names.append(n)
 	yield ('unaligned_normal_bams', names)
@@ -25,7 +30,11 @@ def do_tumor_split(params):
 	subprocess.check_call(cmd, shell=True)
 	names = []
 	for bam in glob("tumor/*.bam"):
-		n = os.path.basename(bam)
+		base = os.path.basename(bam)
+		#the naming pattern is <uuid>_<readgroup>.cleaned.bam
+		n = re.sub(r'........-....-....-....-............_(.*).cleaned.bam', r'\1', base)
+		if n is None or len(n) == 0:
+			n = base
 		yield (n + ":file", bam)
 		names.append(n)
 	yield ('unaligned_tumor_bams', names)
