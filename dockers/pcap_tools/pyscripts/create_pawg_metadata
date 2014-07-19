@@ -133,11 +133,12 @@ def extract_pipeline_sections_from_bam_header(filename):
     #(stdout,stderr)=run_command(["samtools","view","-H",filename])
     id_matcher = re.compile("ID:([^\s]+)")
     pn_matcher = re.compile("PN:([^\t]+)")
-    cl_matcher = re.compile("CL:[\w\/]+\/([^\t]+)")
+    #cl_matcher = re.compile("CL:[\w\/]+\/([^\t]+)")
+    cl_matcher = re.compile("CL:([^\t]+)")
     version_matcher = re.compile("VN:([^\t]+)")
     matchers = [["STEP_INDEX",id_matcher],["PROGRAM",pn_matcher],["VERSION",version_matcher],["NOTES",cl_matcher]]
     bad_tab_matcher = re.compile("\\t")
-    bwa_matcher = re.compile("ID:bwa")
+    bwa_matcher = re.compile("CL:[^\t]*bwa")
     markdups_matcher = re.compile("ID:bammarkduplicates")
 
     (stdout,stderr)=run_command("samtools view -H %s | grep @PG" % (filename))
