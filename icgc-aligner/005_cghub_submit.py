@@ -196,6 +196,8 @@ def cghub_submit_both(params):
         UPLOAD_KEY=UPLOAD_KEY,
         mode="tumor",
         params=params)
+    
+    return []
 
 
 
