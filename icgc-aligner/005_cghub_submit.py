@@ -5,6 +5,7 @@ from subprocess import Popen
 import string
 from glob import glob
 import os
+import uuid
     
 #just for initial debug, these will be filled in by the conf read
 #used currently primarily to test different paths, the destination repo server and study is the same (cghub prod:PCAWG_TEST)
@@ -38,7 +39,10 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     
     download_timing = params["%s_download_timing" % mode]
     merged_metrics = params["%s_merged_metrics" % mode]
-    merged_timing = "%s_merge_timing.txt" % BAM_FILE
+    #merged_metrics = params["%s.markdup.metrics" % UUID]
+    #merged_timing = "%s_merge_timing.txt" % BAM_FILE
+    #merged_timing = "PAWG.%s.bam_merge_timing.txt" % UUID
+    merged_timing = params["%s_merged_timing" % mode]
     #the submission directory
     CWD=os.getcwd()
     SUB_DIR="%s/%s.partial"%(CWD,UUID)
@@ -219,12 +223,14 @@ def main():
     params = {}
     params["debug_path"] = path
     #params[rg1+":aligned_bam"] = "/pod/home/cwilks/p/output/%s/out_%s.bam" % (TEST_UUID,rg1)
-    #params["%s_merged" % mode] = BAM_FILE
+    params["%s_merged_timing" % mode] = "%s/PAWG.%s.bam_merge_timing.txt" % (path,TEST_UUID)
     params["%s_download_timing" % mode] = "%s/%s_download_timing.txt" % (path,TEST_UUID)
     params["%s_merged_metrics" % mode] = "%s/%s.markdup.metrics" % (path,TEST_UUID)
 
     cghub_submit(UUID='%s' % TEST_UUID,
-                 NEW_UUID='d3afc141-bd34-41a5-bbab-4a65c3b0ec27',
+                 NEW_UUID = str(uuid.uuid4()),
+                 #NEW_UUID='2e610b0d-0ac5-4e51-a46a-11b55955b097',
+                 #NEW_UUID='d3afc141-bd34-41a5-bbab-4a65c3b0ec27',
                  #NEW_UUID='c48a703e-48bd-4a6a-8948-c64f87c9cb82',
                  #NEW_UUID='c401159c-75ac-411a-bc74-4b9eaae5fd56', 
                  #NEW_UUID='d3d3aa8d-fab4-43e4-83c9-6102cdaf4ab1',

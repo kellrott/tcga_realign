@@ -28,6 +28,7 @@ def run_normal(params):
 	timing("PAWG.%s.bam_merge" % params['normal_id'])
 	yield ("normal_merged", "PAWG.%s.bam" % (params['normal_id']))
 	yield ("normal_merged_metrics", "%s.markdup.metrics" % (params['normal_id']))
+        yield ("normal_merged_timing", "PAWG.%s.bam_merge_timing.txt" % params['normal_id'])
 
 def run_tumor(params):
 	cmd = string.Template(MARKDUP).substitute(dict(params, OUTFILE="PAWG.%s.bam" % (params['tumor_id']), METRICS_FILE="%s.markdup.metrics" % (params['tumor_id']), TMPBASE="tmp_tumor"))
@@ -38,6 +39,7 @@ def run_tumor(params):
 	timing("PAWG.%s.bam_merge" % params['tumor_id'])
 	yield ("tumor_merged", "PAWG.%s.bam" % (params['tumor_id']))
 	yield ("tumor_merged_metrics", "%s.markdup.metrics" % (params['tumor_id']))
+        yield ("tumor_merged_timing", "PAWG.%s.bam_merge_timing.txt" % params['tumor_id'])
 
 
 class BAMStatsAndVerify:
