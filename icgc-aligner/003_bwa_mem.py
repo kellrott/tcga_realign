@@ -43,12 +43,14 @@ def bwa_steps(params):
 	for rg in params['unaligned_tumor_bams']:
 		o = Aligner(rg, "tumor")
 		yield o.run
+        yield ("tumor:aligned_bam_dir","tumor")
 	
 	if not os.path.exists("normal"):
-		os.mkdir("normal")	
+		os.mkdir("normal")
 	for rg in params['unaligned_normal_bams']:
 		o = Aligner(rg, "normal")
 		yield o.run
+        yield ("normal:aligned_bam_dir","normal")
 
 
 STEPS=bwa_steps

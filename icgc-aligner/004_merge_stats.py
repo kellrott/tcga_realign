@@ -89,6 +89,7 @@ def merge_steps(params):
 		o = BAMStatsAndVerify(rg, "tumor")
 		yield o.run
 		timing("%s_qc" % input_path)
+        yield ("tumor:stats_dir","tumor")
 
 	if not os.path.exists("normal"):
 		os.mkdir("normal")
@@ -98,6 +99,7 @@ def merge_steps(params):
 		o = BAMStatsAndVerify(rg, "normal")
 		yield o.run
 		timing("%s_qc" % input_path)
+        yield ("normal:stats_dir","normal")
 
 STEPS=merge_steps
 RESUME=False

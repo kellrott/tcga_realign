@@ -95,9 +95,9 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
         try:
             if debug:
                 #cmd = "%s %s/add_qc_results_to_metadata.pl %s/%s/analysis.xml %s" % (DEBUG_PERL,DEBUG_SCRIPT_DIR,SUB_DIR,NEW_UUID,QC_STATS_FILE)
-                cmd = "%s %s/add_qc_results_to_metadata.pl %s/%s/analysis.xml %s/%s %s/%s %s %s %s" % (DEBUG_PERL,DEBUG_SCRIPT_DIR,SUB_DIR,NEW_UUID,params["debug_path"],mode,params["debug_path"],mode,download_timing,merged_metrics,merged_timing)
+                cmd = "%s %s/add_qc_results_to_metadata.pl %s/%s/analysis.xml %s %s %s %s %s" % (DEBUG_PERL,DEBUG_SCRIPT_DIR,SUB_DIR,NEW_UUID,params["%s:aligned_bam_dir" % mode],params["%s:stats_dir" % mode],download_timing,merged_metrics,merged_timing)
             else:
-                cmd = "add_qc_results_to_metadata.pl %s/%s/analysis.xml %s %s %s %s %s" % (SUB_DIR,NEW_UUID,os.path.join("003_bwa_mem",mode),os.path.join("004_merge_stats",mode),download_timing,merged_metrics,merged_timing)
+                cmd = "add_qc_results_to_metadata.pl %s/%s/analysis.xml %s %s %s %s %s" % (SUB_DIR,NEW_UUID,params["%s:aligned_bam_dir" % mode],params["%s:stats_dir" % mode],download_timing,merged_metrics,merged_timing)
             (stdout,stderr)=run_command(cmd)
         except CalledProcessError as cpe:
             sys.stderr.write("CGHub QC stats/ICGC fields addition to metadata error\n")
@@ -226,6 +226,8 @@ def main():
     params["%s_merged_timing" % mode] = "%s/PAWG.%s.bam_merge_timing.txt" % (path,TEST_UUID)
     params["%s_download_timing" % mode] = "%s/%s_download_timing.txt" % (path,TEST_UUID)
     params["%s_merged_metrics" % mode] = "%s/%s.markdup.metrics" % (path,TEST_UUID)
+    params["%s:aligned_bam_dir" % mode] = "%s/%s" % (path,mode)
+    params["%s:stats_dir" % mode] = "%s/%s" % (path,mode)
 
     cghub_submit(UUID='%s' % TEST_UUID,
                  NEW_UUID = str(uuid.uuid4()),
