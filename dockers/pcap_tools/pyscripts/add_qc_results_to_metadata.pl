@@ -6,7 +6,7 @@ use Time::Piece;
 my $analysisF = shift;
 #my $qcF=shift;
 my $bwa_output_dir = shift; #also includes "mode" tumor or normal? BAMStats bwa output bams are $mode/rgname.stats $mode/out_rgname.bam
-my $original_uuid = shift;
+my $stats_output_dir = shift;
 my $download_timing = shift;
 my $bammarkduplicates_metrics_file =  shift;
 my $merged_timing = shift;
@@ -43,13 +43,13 @@ while(my $line=<IN>)
   # QC
   print OUT "      <ANALYSIS_ATTRIBUTE>
         <TAG>qc_metrics</TAG>
-        <VALUE>" . &getQcResult($bwa_output_dir) . "</VALUE>
+        <VALUE>" . &getQcResult($stats_output_dir) . "</VALUE>
       </ANALYSIS_ATTRIBUTE>\n";
   
   # Runtime
   print OUT "      <ANALYSIS_ATTRIBUTE>
           <TAG>timing_metrics</TAG>
-          <VALUE>" . &getRuntimeInfo($bwa_output_dir,$download_timing,$merged_timing) . "</VALUE>
+          <VALUE>" . &getRuntimeInfo($bwa_output_dir,$stats_output_dir,$download_timing,$merged_timing) . "</VALUE>
       </ANALYSIS_ATTRIBUTE>\n";
   
   # Markduplicates metrics
@@ -133,11 +133,11 @@ sub read_timing {
 }
 
 sub getRuntimeInfo {
-  my ($stats_dir,$download_timing_file,$merged_timing_file) = @_;
+  my ($bwa_output_dir,$stats_output_dir,$download_timing_file,$merged_timing_file) = @_;
   # detect all the timing files by checking file name pattern, read QC data
   # to pull back the read group and associate with timing
 
-  opendir(DIR, $stats_dir);
+  opendir(DIR, $stats_output_dir);
   #TODO: fix this naming
   my @qc_result_files = grep { /\.stats$/ } readdir(DIR);
 
@@ -146,13 +146,13 @@ sub getRuntimeInfo {
   my $ret = { "timing_metrics" => [] };
 
   foreach (@qc_result_files) {
-
+    my $rg = $_;
     # find the index number so we can match with timing info
   #TODO: fix this naming
     #$_ =~ /out_(\d+)\.bam\.stats\.txt/;
     #my $i = $1;
 
-    open (QC, "< $stats_dir/$_");
+    open (QC, "< $stats_output_dir/$rg");
 
     my @header = split /\t/, <QC>;
     my @data = split /\t/, <QC>;
@@ -164,12 +164,14 @@ sub getRuntimeInfo {
     $qc_metrics->{$_} = shift @data for (@header);
 
     my $read_group = $qc_metrics->{readgroup};
-
+    my @rg_name = split(/\./,$rg);
+    pop(@rg_name);
+    $read_group = join(".",@rg_name);
     # now go ahead and read that index file for timing
   #TODO: fix this naming
     my $download_timing = read_timing($download_timing_file);
-    my $bwa_timing = read_timing("$stats_dir/out_$read_group".".bam_bwa_timing.txt");
-    my $qc_timing = read_timing("$stats_dir/out_$read_group".".bam_qc_timing.txt");
+    my $bwa_timing = read_timing("$bwa_output_dir/out_$read_group".".bam_bwa_timing.txt");
+    my $qc_timing = read_timing("$bwa_output_dir/out_$read_group".".bam_qc_timing.txt");
     my $merge_timing = read_timing($merged_timing_file);
 
     # fill in the data structure
