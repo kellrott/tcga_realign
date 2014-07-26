@@ -4,7 +4,7 @@
     <TITLE>TCGA/ICGC PanCancer Specimen-Level Alignment for Specimen SAMPLE1 from Participant PARTICIPANT1</TITLE>
     <STUDY_REF refcenter="OICR" refname="PCAWG_TEST">
     </STUDY_REF>
-    <DESCRIPTION>Specimen-level BAM from the reference alignment of specimen SAMPLE1 from donor PARTICIPANT1. This uses the SeqWare BWA-Mem PanCancer Workflow version 2.6.0 available at https://s3.amazonaws.com/oicr.workflow.bundles/released-bundles/Workflow_Bundle_BWA_2.5.0_SeqWare_1.0.13.zip.  This workflow can be created from source, see https://github.com/SeqWare/public-workflows. Input BAMs are prepared and submitted to GNOS server according to the submission SOP documented at: https://wiki.oicr.on.ca/display/PANCANCER/PCAP+%28a.k.a.+PAWG%29+Sequence+Submission+SOP+-+v1.0</DESCRIPTION>
+    <DESCRIPTION>Specimen-level BAM from the reference alignment of specimen SAMPLE1 from donor PARTICIPANT1. This is based on the SeqWare BWA-Mem PanCancer Workflow version 2.6.0 available at https://s3.amazonaws.com/oicr.workflow.bundles/released-bundles/Workflow_Bundle_BWA_2.6.0_SeqWare_1.0.15.zip.  This workflow can be created from source, see https://github.com/kellrott/tcga_realign. Input BAMs are prepared and submitted to GNOS server according to the submission SOP documented at: https://wiki.oicr.on.ca/display/PANCANCER/PCAP+%28a.k.a.+PAWG%29+Sequence+Submission+SOP+-+v1.0</DESCRIPTION>
     <ANALYSIS_TYPE>
       <REFERENCE_ALIGNMENT>
         <ASSEMBLY>
@@ -149,11 +149,11 @@
       </ANALYSIS_ATTRIBUTE>
       <ANALYSIS_ATTRIBUTE>
         <TAG>workflow_source_url</TAG>
-        <VALUE>https://github.com/SeqWare/public-workflows</VALUE>
+        <VALUE>https://github.com/kellrott/tcga_realign</VALUE>
       </ANALYSIS_ATTRIBUTE>
       <ANALYSIS_ATTRIBUTE>
         <TAG>workflow_bundle_url</TAG>
-        <VALUE>https://s3.amazonaws.com/oicr.workflow.bundles/released-bundles/Workflow_Bundle_BWA_2.6.0_SeqWare_1.0.13.zip</VALUE>
+        <VALUE>https://s3.amazonaws.com/oicr.workflow.bundles/released-bundles/Workflow_Bundle_BWA_2.6.0_SeqWare_1.0.15.zip</VALUE>
       </ANALYSIS_ATTRIBUTE>
       <ANALYSIS_ATTRIBUTE>
         <TAG>bwa_version</TAG>

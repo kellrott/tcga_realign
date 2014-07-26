@@ -52,7 +52,6 @@ TITLE='TCGA/ICGC PanCancer Specimen-Level Alignment for Specimen %s from Partici
 PIPELINE_INFO_HEADER_BY_RG='participant_id|sample_id|target_sample_refname|aliquot_id|library|platform_unit|read_group_id|analysis_id|bam_file'
 
 
-
 if ANALYSIS_ID is None or CHECKSUM is None or FILENAME is None or NEW_NORMAL_UUID is None:
     sys.stderr.write("MUST submit: the original TCGA source BAM's analysis_id(uuid), MD5 checksum, the associated normal bams new analysis uuid, and a filename\n")
     sys.exit(-1)
@@ -71,22 +70,28 @@ def run_command(command=str):
         sys.exit(-1)
     return (stdout,stderr)
 
-def create_pipeline_info(info_hash,bam_filename,rg):
-    #pinfo = {}
-    pinfo = []
-    #pinfo['donor_id']=info_hash['submitter_donor_id']
-    #pinfo['specimen_id']=info_hash['submitter_specimen_id']
-    #pinfo['target_sample_refname']=info_hash['submitter_sample_id']
+#new json way of creating info
+def create_pipeline_info_hash(info_hash,bam_filename,rg):
+    pinfo = {}
+    pinfo['donor_id']=info_hash['submitter_donor_id']
+    pinfo['specimen_id']=info_hash['submitter_specimen_id']
+    pinfo['target_sample_refname']=info_hash['submitter_sample_id']
  #       $pi->{'input_info'}{'analyzed_sample'} = $aliquot_id;
-    #pinfo['analyzed_sample']=info_hash['submitter_sample_id']
-    #pinfo['analysis_id']=info_hash['original_analysis_id']
-    #pinfo['bam_file']=bam_filename
+    pinfo['analyzed_sample']=info_hash['submitter_sample_id']
+    pinfo['analysis_id']=info_hash['original_analysis_id']
+    pinfo['bam_file']=bam_filename
     
-    #pinfo['library']=rg['library']
-    #pinfo['platform_unit']=rg['platform_unit']
+    pinfo['library']=rg['library']
+    pinfo['platform_unit']=rg['platform_unit']
+    
     #pinfo['read_group_id']=rg['read_group_id']
-    #PIPELINE_INFO_HEADER_BY_RG='participant_id|sample_id|target_sample_refname|aliquot_id|library|platform_unit|read_group_id|analysis_id|bam_file'
+    
+    return {'read_group_id':rg['read_group_id'],"input_info":pinfo}
 
+#old pipes way of creating info
+def create_pipeline_info_pipes(info_hash,bam_filename,rg):
+    pinfo = []
+    
     pinfo.append(info_hash['submitter_donor_id'])
     pinfo.append(info_hash['submitter_specimen_id'])
     pinfo.append(info_hash['submitter_sample_id'])
@@ -97,7 +102,6 @@ def create_pipeline_info(info_hash,bam_filename,rg):
     pinfo.append(info_hash['original_analysis_id'])
     pinfo.append(bam_filename)
     
-    #return json.dumps(pinfo)
     return '|'.join(pinfo)
 
 def extract_read_groups_from_bam_header(filename):
@@ -140,12 +144,28 @@ def extract_pipeline_sections_from_bam_header(filename):
     bad_tab_matcher = re.compile("\\t")
     bwa_matcher = re.compile("CL:[^\t]*bwa")
     markdups_matcher = re.compile("ID:bammarkduplicates")
+    bamsort_matcher = re.compile("ID:bamsort")
 
     (stdout,stderr)=run_command("samtools view -H %s | grep @PG" % (filename))
     print stdout
     #report=stdout.split("\n")
     previous_step_idx="NIL"
     pipe_sections=[]
+    #add in bam2fastq step, not in bam headers
+    e=xp.Element("PIPE_SECTION")
+    e.set("section_name","fastq_extract")
+    sube=xp.SubElement(e,"STEP_INDEX")
+    sube.text=("bamtofastq")
+    sube=xp.SubElement(e,"PREV_STEP_INDEX")
+    sube.text=("NIL")
+    sube=xp.SubElement(e,"PROGRAM")
+    sube.text=("bamtofastq")
+    sube=xp.SubElement(e,"VERSION")
+    sube.text=("0.0.148")
+    sube=xp.SubElement(e,"NOTES")
+    sube.text=("[NOTE: this is a single generic example command, bamtofasq was actually run for all individual read group bams] bamtofastq T=bamtofastq_tmp S=single.fq O=unmatched_1.fq O2=unmatched_2.fq exclude=QCFAIL,SECONDARY,SUPPLEMENTARY collate=1 tryoq=1 filename=single_read_group.bam")
+    pipe_sections.append(e)
+
     for line in stdout.split("\n"):
         if len(line) < 1:
             continue
@@ -158,11 +178,13 @@ def extract_pipeline_sections_from_bam_header(filename):
         # abit hacky because we assume bwa but we need to know if this is an alignment section
         e=xp.Element("PIPE_SECTION")
         if bwa_matcher.search(line) != None:
-            e.set("section_name","Mapping")
-            previous_step_idx="NIL"
+            previous_step_idx="bamtofastq"
+            e.set("section_name","mapping")
         if markdups_matcher.search(line) != None:
-            e.set("section_name","Markduplicates")
+            e.set("section_name","mark_duplicates")
             previous_step_idx="bamsort"
+        if bamsort_matcher.search(line) != None:
+            e.set("section_name","bam_sort")
         index=0
         for matcher_ in matchers:
             (tag,matcher)=matcher_
@@ -255,14 +277,25 @@ def process_analysis_xml(original_uuid,filename,checksum,path):
        pipeline.append(pipe_section)
      
     attributes=root_new.find("ANALYSIS/ANALYSIS_ATTRIBUTES")
+    pinfo = []
     for (read_group_id,rg) in readgroups.iteritems():
-        icgc_pipeline_fields = create_pipeline_info(icgc_infohash,filename,rg)
-        e=xp.Element("ANALYSIS_ATTRIBUTE")
-        k=xp.SubElement(e,"TAG")
-        k.text="pipeline_input_info:%s" % (PIPELINE_INFO_HEADER_BY_RG)
-        k=xp.SubElement(e,"VALUE")
-        k.text=icgc_pipeline_fields
-        attributes.append(e)
+        pinfo.append(create_pipeline_info_hash(icgc_infohash,filename,rg))
+        
+    e=xp.Element("ANALYSIS_ATTRIBUTE")
+    k=xp.SubElement(e,"TAG")
+    k.text="pipeline_input_info"
+    k=xp.SubElement(e,"VALUE")
+    #k.text=json.dumps({"pipeline_input_info":pinfo},sort_keys=True)
+    k.text=json.dumps({"pipeline_input_info":pinfo},sort_keys=False)
+    attributes.append(e)
+    #for (read_group_id,rg) in readgroups.iteritems():
+    #    icgc_pipeline_fields = create_pipeline_info(icgc_infohash,filename,rg)
+    #    e=xp.Element("ANALYSIS_ATTRIBUTE")
+    #    k=xp.SubElement(e,"TAG")
+    #    k.text="pipeline_input_info:%s" % (PIPELINE_INFO_HEADER_BY_RG)
+    #    k=xp.SubElement(e,"VALUE")
+    #    k.text=icgc_pipeline_fields
+    #    attributes.append(e)
     
     #final: write out new analysis.xml
     st=xp.tostring(root_new,pretty_print=True)
