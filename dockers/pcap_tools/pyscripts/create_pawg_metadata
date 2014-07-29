@@ -280,7 +280,7 @@ def add_icgc_specific_metadata(xp,root):
     dummy_rg_line = ""
     rg_dict=header_utils.get_read_group_info(dummy_rg_line,logger=default_logger)
     dcc_md = header_utils.parse_cghub_metadata(ANALYSIS_ID, logger=default_logger)
-    (icgc_type, sample_class) = specimen_dict[dcc_md["sample_type"]]
+    (icgc_type, sample_class) = specimen_dict.get(dcc_md["sample_type"], ("unknown", "unknown"))
     #icgc needs to track the accociated Normal BAM's new analyis uuid
     dcc_md['use_cntl']=str(NEW_NORMAL_UUID)
     #however, if this is a normal bam, this should be passed in as "N/A"

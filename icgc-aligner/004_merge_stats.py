@@ -51,6 +51,7 @@ class BAMStatsAndVerify:
 		input_path = params[self.input_name + ":aligned_bam"]
 		output_path =  os.path.join(self.mode, "%s.stats" % (self.input_name))
 
+		timing("%s_qc" % input_path)
 		cmd = "bam_stats.pl -i %s -o %s" % (
 			input_path,
 			output_path
@@ -73,9 +74,13 @@ class BAMStatsAndVerify:
 		#subprocess.check_call(cmd, shell=True)
 		#this will die (and then raise an exception) if the verification fails at any point
 		(stdout,stderr)=run_command(cmd)
-	
+		timing("%s_qc" % input_path)
+			
 		yield (self.input_name + ":aligned_stats", output_path)
 
+def stat_dirs(params):
+    yield ("tumor:stats_dir","tumor")
+    yield ("normal:stats_dir","normal")
 
 def merge_steps(params):
 	yield run_normal
@@ -85,22 +90,18 @@ def merge_steps(params):
 		os.mkdir("tumor")
 	for rg in params['unaligned_tumor_bams']:
 		input_path = params[rg + ":aligned_bam"]
-		timing("%s_qc" % input_path)
 		o = BAMStatsAndVerify(rg, "tumor")
 		yield o.run
-		timing("%s_qc" % input_path)
-        yield ("tumor:stats_dir","tumor")
-
+		
 	if not os.path.exists("normal"):
 		os.mkdir("normal")
 	for rg in params['unaligned_normal_bams']:
 		input_path = params[rg + ":aligned_bam"]
-		timing("%s_qc" % input_path)
 		o = BAMStatsAndVerify(rg, "normal")
 		yield o.run
-		timing("%s_qc" % input_path)
-        yield ("normal:stats_dir","normal")
-
+	
+	yield stat_dirs
+		
 STEPS=merge_steps
 RESUME=False
 STORE=False

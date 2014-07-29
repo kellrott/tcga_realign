@@ -7,6 +7,8 @@ from xml.etree import ElementTree
 
 default_logger = logging.getLogger(name='pcap_split')
 
+FORCE_RUN=True
+
 class HeaderException(Exception):
     pass
 
@@ -35,7 +37,7 @@ def create_header(analysis_outdir, metadata, rg_dict, specimen_dict, logger=defa
     header_file.write("@HD\tVN:1.4\n")
     PI_STR = ""
     if len(rg_dict["PI"]):
-		PI_STR="PI:%s\t" % (rg_dict["PI"])
+        PI_STR="PI:%s\t" % (rg_dict["PI"])
     header_file.write("@RG\tID:%s:%s\tCN:%s\tPL:%s\tPM:%s\tLB:%s:%s:%s\t%sSM:%s\tPU:%s:%s\tDT:%s\n"
                 %(metadata["center_name"], rgid,metadata["center_name"], metadata["platform"],metadata["platform_model"], metadata["seqtype"],
                 metadata["center_name"], rg_dict["LB"], PI_STR, metadata["aliquot_id"], rg_dict["CN"], rg_dict["PU"], getUTCDate(rg_dict["DT"])))
@@ -47,22 +49,28 @@ def create_header(analysis_outdir, metadata, rg_dict, specimen_dict, logger=defa
     if metadata["sample_type"] not in specimen_dict:
         msg = "sample_type %s not found in specimen mapping" % metadata["sample_type"]
         logger.error(msg)
-        raise HeaderException(msg)
+        if not FORCE_RUN:
+            raise HeaderException(msg)
 
-    (icgc_type, sample_class) = specimen_dict[metadata["sample_type"]]
-
+    if "sample_type" in metadata and metadata["sample_type"] in specimen_dict:
+        (icgc_type, sample_class) = specimen_dict[metadata["sample_type"]]
+    else:
+        icgc_type = "unknown"
+        sample_class = "unknown"
+        
     #Sanity check about use_cntl
-    if metadata["use_cntl"] == "N/A" and sample_class == "tumour":
-        msg = "Tumour sample requires use_cntl, set to %s. Are your IDs in the wrong order?" % metadata["use_cntl"]
-        logger.error(msg)
-        raise HeaderException(msg)
-    if sample_class == "normal" and metadata["use_cntl"] != "N/A":
-        msg = "Normal sample requires N/A use_cntl, set to %s. Are your IDs in the wrong order?" % metadata["use_cntl"]
-        logger.error(msg)
-        raise HeaderException(msg)
+    if "use_cntl" in metadata:
+        if metadata["use_cntl"] == "N/A" and sample_class == "tumour":
+            msg = "Tumour sample requires use_cntl, set to %s. Are your IDs in the wrong order?" % metadata["use_cntl"]
+            logger.error(msg)
+            raise HeaderException(msg)
+        if sample_class == "normal" and metadata["use_cntl"] != "N/A":
+            msg = "Normal sample requires N/A use_cntl, set to %s. Are your IDs in the wrong order?" % metadata["use_cntl"]
+            logger.error(msg)
+            raise HeaderException(msg)
                                                             
     header_file.write("@CO\tdcc_specimen_type:%s\n" % icgc_type)
-    header_file.write("@CO\tuse_cntl:%s\n" %(metadata["use_cntl"]))
+    header_file.write("@CO\tuse_cntl:%s\n" %(metadata.get("use_cntl", "NA")))
     header_file.close()
     return header
 
@@ -123,11 +131,10 @@ def get_read_group_info(line, logger=default_logger):
     rg_dict = dict()
     #Initialize the dictionary, so we know if any fields are missing
     rg_dict["PI"] = ""
-    rg_dict["CN"] = ""
+    rg_dict["CN"] = "UNKNOWN"
     rg_dict["ID"] = ""
-    rg_dict["PL"] = ""
+    rg_dict["PL"] = "UNKNOWN"
     rg_dict["LB"] = ""
-    rg_dict["PI"] = ""
     rg_dict["SM"] = ""
     rg_dict["PU"] = ""
     rg_dict["DT"] = ""
@@ -172,13 +179,13 @@ def is_valid_analysis(info, logger=default_logger):
     """Check fields with controlled vocabulary"""
 
     if(info["center_name"] not in ["BCM", "BCCAGSC", "BI", "HMS-RK", "UNC-LCCC", "WUGSC", "USC-JHU"]):
-        logger.error("The center %s is not in the defined center vocabulary" %(info["CN"]))
+        logger.error("The center %s is not in the defined center vocabulary" %(info.get("CN", "None")))
         return False
     if(info["platform"] not in ["CAPILLARY", "LS454", "ILLUMINA", "SOLID", "HELICOS", "IONTORRENT", "PACBIO"]):
-        logger.error("The platform %s is not in the defined platform vocabulary" %(info["PL"]))
+        logger.error("The platform %s is not in the defined platform vocabulary" %(info.get("PL", "None")))
         return False
     if(info["platform_model"] not in ["Illumina Genome Analyzer II", "Illumina HiSeq", "Illumina HiSeq 2000", "Illumina HiSeq 2500"]):
-        logger.error("The platform unit %s is not in the defined platform vocabulary" %(info["PU"]))
+        logger.error("The platform unit %s is not in the defined platform vocabulary" %(info.get("PU", "None")))
         return False
     return True
 
