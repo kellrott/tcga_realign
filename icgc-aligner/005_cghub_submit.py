@@ -165,6 +165,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     if state is None or state == "" or state == "submitted" or state == "uploading":
         try:
             if debug:
+                #return True
                 cmd = "%s/gtupload -c %s -u %s/manifest.xml -vv 2>%s/upload.stderr.log" % (DEBUG_SCRIPT_DIR,DEBUG_UPLOAD_KEY,NEW_UUID,SUB_DIR)
             else:
                 cmd = "gtupload -c %s -u %s/manifest.xml -vv 2>%s/upload.stderr.log" % (UPLOAD_KEY,NEW_UUID,SUB_DIR)
@@ -191,7 +192,7 @@ def cghub_submit_both(params):
         UPLOAD_KEY=UPLOAD_KEY,
         mode="normal",
         params=params,
-        test=params['test'])
+        test=params.get('test',False))
 
     cghub_submit(UUID=params['tumor_id'], 
         NEW_UUID=params['new_tumor_id'],
@@ -203,7 +204,7 @@ def cghub_submit_both(params):
         UPLOAD_KEY=UPLOAD_KEY,
         mode="tumor",
         params=params,
-        test=params['test'])
+        test=params.get('test',False))
     
     return []
 
@@ -253,7 +254,7 @@ def main():
                  UPLOAD_KEY=UPLOAD_KEY,
                  mode=mode,
                  params=params,
-                 #test=True,
+                 test=True,
                  debug=True)
 
 
