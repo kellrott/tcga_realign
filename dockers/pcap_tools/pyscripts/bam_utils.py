@@ -9,6 +9,8 @@ default_logger = logging.getLogger()
 default_logger.setLevel(logging.DEBUG)
 default_logger.addHandler(logging.StreamHandler())
 
+FORCE_RUN=True
+
 class BAMException(Exception):
     pass
 
@@ -96,7 +98,7 @@ def gen_unaligned_bam(bam_filename, analysis_id, metadata, specimen_dict, work_d
         return 1
         
 
-    if(header_utils.is_valid_analysis(metadata)):
+    if header_utils.is_valid_analysis(metadata) or FORCE_RUN:
         pool = multiprocessing.Pool(processes=num_processes)
         results = []
         for line in rg_file:
