@@ -27,6 +27,8 @@ import header_utils
 import json
 import CGHWSI
 
+ANALYSIS_TEMPLATE_FILENAME='analysis.pawg_template.xml'
+
 basedir = os.path.abspath(os.path.dirname( __file__ ))
 default_logger = logging.getLogger(name='create_pawg_metadata')
 
@@ -38,6 +40,7 @@ parser.add_option("-p", action="store",type='string',dest="path_to_working_dir",
 parser.add_option("-t", action="store",type='string',dest="new_normal_uuid",default=None,help="REQUIRED: new analysis uuid for the associated realigned normal (for use_cntl)")
 parser.add_option("-n", action="store",type='string',dest="new_uuid",default=None,help="OPTIONAL: new analysis uuid of this realigned bam")
 parser.add_option("-s", action="store",type='string',dest="specimen_file",default=os.path.join(basedir,'tcga_dcc_specimen_type.txt'),help="OPTIONAL: mapping file between TCGA sample id and ICGC sample name")
+parser.add_option("-d", action="store",type='string',dest="analysis_template",default=ANALYSIS_TEMPLATE_FILENAME,help="OPTIONAL: this specifies the filename of the analysis.xml template file for the metadata creation, the default is analysis.pawg_template.xml")
 
 (options,args) = parser.parse_args()
 ANALYSIS_ID=options.analysis_id
@@ -46,6 +49,7 @@ FILENAME=options.filename
 NEW_UUID=options.new_uuid
 NEW_NORMAL_UUID=options.new_normal_uuid
 SPECIMEN_FILE=options.specimen_file
+ANALYSIS_TEMPLATE_FILENAME=options.analysis_template
 
 ANALYSIS_CENTER='UCSC'
 TITLE='TCGA/ICGC PanCancer Specimen-Level Alignment for Specimen %s from Participant %s'
@@ -222,7 +226,7 @@ def process_analysis_xml(original_uuid,filename,checksum,path):
     tree_orig=xp.parse("./%s/analysis.xml" % (original_uuid),parser)
     root_orig=tree_orig.getroot()
     
-    tree_new=xp.parse("%s/analysis.pawg_template.xml"%(os.path.dirname(__file__)),parser)
+    tree_new=xp.parse("%s/%s"%(os.path.dirname(__file__),ANALYSIS_TEMPLATE_FILENAME),parser)
     root_new=tree_new.getroot()
     #6) (optional) update ICGC specific ANALYSIS_ATTRIBUTES
     (icgc_attributes,icgc_infohash)=add_icgc_specific_metadata(xp,root_new) 
