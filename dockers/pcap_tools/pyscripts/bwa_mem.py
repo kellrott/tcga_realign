@@ -45,11 +45,11 @@ def main(args):
 	#need this for later, for the metrics/stats inclusion in the metadata, it may also behoove us to put this as the rgline
 	#header_cmd = "samtools view -H %s | perl -nae 'next unless /^\@RG/; s/\tPI:\s*\t/\t/; s/\tPI:\s*\z/\n/; s/\t/\\\t/g; print' > %s.header.txt" % (args.inbam,args.inbam)
 	#don't do the \t to \\\t translation, not needed at this point messes up the verification step
-	header_cmd = "samtools view -H %s | perl -nae 'next unless /^\@RG/; s/\tPI:\s*\t/\t/; s/\tPI:\s*\z/\n/; print' > %s.header.txt" % (args.inbam,args.inbam)
+	header_cmd = "set -e; set -o pipefail; samtools view -H %s | perl -nae 'next unless /^\@RG/; s/\tPI:\s*\t/\t/; s/\tPI:\s*\z/\n/; print' > %s.header.txt" % (args.inbam,args.inbam)
 
 	run_command(header_cmd)
 
-	template = "bamtofastq T=${tmpdir}/bamtofastq_tmp S=${tmpdir}/single.fq O=${tmpdir}/unmatched_1.fq O2=${tmpdir}/unmatched_2.fq exclude=QCFAIL,SECONDARY,SUPPLEMENTARY collate=1 filename=${inbam} | \
+	template = "set -e; set -o pipefail; bamtofastq T=${tmpdir}/bamtofastq_tmp S=${tmpdir}/single.fq O=${tmpdir}/unmatched_1.fq O2=${tmpdir}/unmatched_2.fq exclude=QCFAIL,SECONDARY,SUPPLEMENTARY collate=1 filename=${inbam} | \
 ${filter_cmd} 2> ${inbam}.count.txt | \
 bwa mem -t 8 -p -T 0 -R '${rgline}' ${refseq} - | \
 bamsort inputformat=sam level=1 inputthreads=2 outputthreads=2 calmdnm=1 calmdnmrecompindetonly=1 calmdnmreference=${refseq} tmpfile=${tmpdir}/out.sorttmp O=${tmpdir}/out.bam 2> ${inbam}.bamsort_info.txt"

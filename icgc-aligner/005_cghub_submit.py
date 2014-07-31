@@ -35,7 +35,7 @@ def run_command(command=str, cwd=None):
     return (stdout,stderr)
 
 #def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NORMAL_UUID, NEW_NORMAL_UUID, UPLOAD_KEY, mode, params, debug=False):
-def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_NORMAL_UUID, UPLOAD_KEY, mode, params, debug=False):
+def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_NORMAL_UUID, UPLOAD_KEY, mode, params, test=False, debug=False):
     
     download_timing = params["%s_download_timing" % mode]
     merged_metrics = params["%s_merged_metrics" % mode]
@@ -81,11 +81,15 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     #if not os.path.exists("%s/%s" % (SUB_DIR,NEW_UUID)) or not os.path.exists("%s/%s" % (SUB_DIR,UUID)):
     #if not os.path.exists( os.path.join(SUB_DIR,NEW_UUID"trans.map") ):
     if not os.path.exists( os.path.join(SUB_DIR,"MD_DONE") ):
+        additional_test_options = ""
+        if test:
+            #use the test template, goes to a different study
+            additional_test_options = "-d analysis.pawg_template.test.xml"
         try:
             if debug:
-                cmd = "%s %s/create_pawg_metadata -u %s -f PCAWG.%s.bam -c %s -t %s -n %s -p %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,UUID,UUID,md5,NEW_NORMAL_UUID,NEW_UUID,SUB_DIR)
+                cmd = "%s %s/create_pawg_metadata -u %s -f PCAWG.%s.bam -c %s -t %s -n %s -p %s %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,UUID,UUID,md5,NEW_NORMAL_UUID,NEW_UUID,SUB_DIR,additional_test_options)
             else:
-                cmd = "create_pawg_metadata -u %s -f PCAWG.%s.bam -c %s -t %s -n %s -p %s" % (UUID,UUID,md5,NEW_NORMAL_UUID,NEW_UUID,SUB_DIR)
+                cmd = "create_pawg_metadata -u %s -f PCAWG.%s.bam -c %s -t %s -n %s -p %s %s" % (UUID,UUID,md5,NEW_NORMAL_UUID,NEW_UUID,SUB_DIR,additional_test_options)
             (stdout,stderr)=run_command(cmd)
         except CalledProcessError as cpe:
             sys.stderr.write("CGHub metadata creation error\n")
@@ -123,6 +127,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     if ( state is None or state == "" ) and not os.path.exists( os.path.join(SUB_DIR,"SUBMIT_DONE") ):
     #if not os.path.exists( os.path.join(SUB_DIR,"SUBMIT_DONE") ):
         try:
+            #return True
             if debug:
                 cmd = "%s %s/cgsubmit_fixed -s %s -c %s -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,REPO_SERVER,DEBUG_UPLOAD_KEY,NEW_UUID)
             else:
@@ -140,7 +145,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     elif not os.path.exists( os.path.join(SUB_DIR,NEW_UUID,"manifest.xml") ):
         try:
             if debug:
-                #return
+                #return True
                 cmd = "%s %s/cgsubmit_fixed -s %s --validate-only -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,REPO_SERVER,NEW_UUID)
             else:
                 cmd = "cgsubmit_fixed --validate-only -u %s" % (NEW_UUID)
@@ -160,7 +165,8 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     if state is None or state == "" or state == "submitted" or state == "uploading":
         try:
             if debug:
-                cmd = "gtupload -c %s -u %s/manifest.xml -vv 2>%s/upload.stderr.log" % (DEBUG_UPLOAD_KEY,NEW_UUID,SUB_DIR)
+                #return True
+                cmd = "%s/gtupload -c %s -u %s/manifest.xml -vv 2>%s/upload.stderr.log" % (DEBUG_SCRIPT_DIR,DEBUG_UPLOAD_KEY,NEW_UUID,SUB_DIR)
             else:
                 cmd = "gtupload -c %s -u %s/manifest.xml -vv 2>%s/upload.stderr.log" % (UPLOAD_KEY,NEW_UUID,SUB_DIR)
             (stdout,stderr)=run_command(cmd, SUB_DIR)
@@ -176,7 +182,6 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     os.rename(SUB_DIR,FIN_DIR)
 
 def cghub_submit_both(params):
-    bas_file = "PCAWG.%s.bas" % ( params['normal_id'] )
     cghub_submit(UUID=params['normal_id'], 
         NEW_UUID=params['new_normal_id'],
         NORMAL_UUID=params['normal_id'],
@@ -185,11 +190,10 @@ def cghub_submit_both(params):
         BAM_FILE=params['normal_merged'],
         MD5=params['normal_merged'] + ".md5",
         UPLOAD_KEY=UPLOAD_KEY,
-        #QC_STATS_FILE=bas_file,
         mode="normal",
-        params=params)
+        params=params,
+        test=params.get('test',False))
 
-    bas_file = "PCAWG.%s.bas" % ( params['tumor_id'] )
     cghub_submit(UUID=params['tumor_id'], 
         NEW_UUID=params['new_tumor_id'],
         NORMAL_UUID=params['tumor_id'],
@@ -199,7 +203,8 @@ def cghub_submit_both(params):
         MD5=params['tumor_merged'] + ".md5",
         UPLOAD_KEY=UPLOAD_KEY,
         mode="tumor",
-        params=params)
+        params=params,
+        test=params.get('test',False))
     
     return []
 
@@ -231,6 +236,7 @@ def main():
 
     cghub_submit(UUID='%s' % TEST_UUID,
                  NEW_UUID = str(uuid.uuid4()),
+                 #NEW_UUID='a04a7f49-d962-4b05-a668-ff10b973eca1',
                  #NEW_UUID='2e610b0d-0ac5-4e51-a46a-11b55955b097',
                  #NEW_UUID='d3afc141-bd34-41a5-bbab-4a65c3b0ec27',
                  #NEW_UUID='c48a703e-48bd-4a6a-8948-c64f87c9cb82',
@@ -248,6 +254,7 @@ def main():
                  UPLOAD_KEY=UPLOAD_KEY,
                  mode=mode,
                  params=params,
+                 test=True,
                  debug=True)
 
 
