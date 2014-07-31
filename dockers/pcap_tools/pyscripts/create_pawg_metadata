@@ -133,11 +133,12 @@ def extract_pipeline_sections_from_bam_header(filename):
     #(stdout,stderr)=run_command(["samtools","view","-H",filename])
     id_matcher = re.compile("ID:([^\s]+)")
     pn_matcher = re.compile("PN:([^\t]+)")
-    cl_matcher = re.compile("CL:[\w\/]+\/([^\t]+)")
+    #cl_matcher = re.compile("CL:[\w\/]+\/([^\t]+)")
+    cl_matcher = re.compile("CL:([^\t]+)")
     version_matcher = re.compile("VN:([^\t]+)")
     matchers = [["STEP_INDEX",id_matcher],["PROGRAM",pn_matcher],["VERSION",version_matcher],["NOTES",cl_matcher]]
     bad_tab_matcher = re.compile("\\t")
-    bwa_matcher = re.compile("ID:bwa")
+    bwa_matcher = re.compile("CL:[^\t]*bwa")
     markdups_matcher = re.compile("ID:bammarkduplicates")
 
     (stdout,stderr)=run_command("samtools view -H %s | grep @PG" % (filename))
@@ -279,7 +280,7 @@ def add_icgc_specific_metadata(xp,root):
     dummy_rg_line = ""
     rg_dict=header_utils.get_read_group_info(dummy_rg_line,logger=default_logger)
     dcc_md = header_utils.parse_cghub_metadata(ANALYSIS_ID, logger=default_logger)
-    (icgc_type, sample_class) = specimen_dict[dcc_md["sample_type"]]
+    (icgc_type, sample_class) = specimen_dict.get(dcc_md["sample_type"], ("unknown", "unknown"))
     #icgc needs to track the accociated Normal BAM's new analyis uuid
     dcc_md['use_cntl']=str(NEW_NORMAL_UUID)
     #however, if this is a normal bam, this should be passed in as "N/A"

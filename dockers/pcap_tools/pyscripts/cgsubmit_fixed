@@ -925,7 +925,9 @@ class CGHubSubmit:
             self.myname = os.path.basename(sys.argv[0])
         except:
             self.myname = "cgsubmit"
-        self.tmproot = os.path.join("/", "tmp", self.myname)
+        #hacking around this stupid idea of trying to create a top level cgsubmit dir in /tmp
+        #self.tmproot = os.path.join("/", "tmp", self.myname)
+        self.tmproot = os.path.join("/", "tmp")
         self.tmppid = None
         self.tmpdir = None
 
@@ -978,6 +980,7 @@ class CGHubSubmit:
             -----------------------------------------------------------------
         """
         try:
+            pass
             #
             # First, clean up any files we created 
             #
@@ -985,17 +988,17 @@ class CGHubSubmit:
                 for tmproot, dirs, files in os.walk(self.tmpdir, topdown=False):
                     for tmpf in files:
                         os.unlink(os.path.join(tmproot, tmpf))
-            #
+            
             # Then remove any empty directories all the way up to the
             # top of our temporary tree
             #
             if self.tmppid and os.path.exists(self.tmppid):
                 for tmproot, dirs, files in os.walk(self.tmppid, topdown=False):
                     os.rmdir(tmproot)
-            #
+            
             # Finally, if the temp root is empty, remove it
-            # 
-            os.rmdir(self.tmproot)
+            # (actually in this hacked version, leave this as its /tmp
+            #os.rmdir(self.tmproot)
 
         except:
             # Did our best

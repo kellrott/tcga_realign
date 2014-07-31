@@ -33,10 +33,7 @@ def run_pipeline(args):
 
     params = None
     with open(args.workfile) as handle:
-        for line in handle:
-            m = json.loads(line)
-            if m['id'] == args.id:
-                params = m
+        params = json.loads(handle.read())
     params['ncpus'] = args.ncpus
 
     if params is None:
@@ -49,7 +46,7 @@ def run_pipeline(args):
         os.mkdir(args.workdir)
 
     #make sure the working directory for this job exists
-    iddir = os.path.join(args.workdir, args.id)
+    iddir = os.path.join(args.workdir, params['id'])
     if not os.path.exists(iddir):
         os.mkdir(iddir)
 
@@ -58,7 +55,7 @@ def run_pipeline(args):
         os.mkdir(args.outdir)
 
     #make sure the output directory for this job exists
-    final_iddir = os.path.join(args.outdir, args.id)
+    final_iddir = os.path.join(args.outdir, params['id'])
     if not os.path.exists(final_iddir):
         os.mkdir(final_iddir)
 
@@ -81,20 +78,21 @@ def run_pipeline(args):
         stage = int(os.path.basename(m).split("_")[0])
                     
         #get the names of the working directory and the final output directory
-        workdir = os.path.abspath(os.path.join(args.workdir,args.id, name))
-        finaldir = os.path.abspath(os.path.join(args.outdir,args.id, name))
+        workdir = os.path.abspath(os.path.join(args.workdir,params['id'], name))
+        finaldir = os.path.abspath(os.path.join(args.outdir,params['id'], name))
 
         #load the module code
-        logging.info("Checking for %s run for %s" % (args.id, name))
+        logging.info("Checking for %s run for %s" % (params['id'], name))
         f, m_name, desc = imp.find_module(name, [os.path.dirname(m)])
         mod = imp.load_module(name, f, m_name, desc)
 
         #check for existing results
         if not os.path.exists(finaldir) and not os.path.exists(workdir):
+            logging.info("Results for %s run for %s not found" % (params['id'], name))
             if args.stages is not None and stage not in args.stages:
                 logging.info("Stopping at Stage %s" % (name))
                 return 0
-            logging.info("Results for %s run for %s not found" % (args.id, name))
+            logging.info("Results for %s run for %s not found" % (params['id'], name))
 
             files = []
             try:
@@ -119,8 +117,8 @@ def run_pipeline(args):
                         os.path.abspath(args.pipeline),
                         data_mount,
                         mod.IMAGE,
-                        args.id, name,
-                        os.path.join("/pipeline/work/", args.id, name + ".params")
+                        params['id'], name,
+                        os.path.join("/pipeline/work/", params['id'], name + ".params")
                     )
                 else:
                     cmd = "%s exec %s/params" % (__file__, workdir)
@@ -133,12 +131,12 @@ def run_pipeline(args):
 
         else:
             if os.path.exists( finaldir + ".error" ):
-                logging.error("Error found for %s run for %s" % (args.id, name))
+                logging.error("Error found for %s run for %s" % (params['id'], name))
                 if not hasattr(mod, "FAIL") or mod.FAIL != 'soft':
                     return 1
-            logging.info("Results found for %s run for %s" % (args.id, name))
+            logging.info("Results found for %s run for %s" % (params['id'], name))
 
-        with open(os.path.join(args.outdir, args.id, name + ".output")) as handle:
+        with open(os.path.join(args.outdir, params['id'], name + ".output")) as handle:
             txt = handle.read()
             data = json.loads(txt)
             params_merge[name] = {}
@@ -406,12 +404,11 @@ if __name__ == "__main__":
     parser_run.add_argument("--ncpus", default="8")
     parser_run.add_argument("--data", action="append")
     parser_run.add_argument("--docker", action="store_true", default=False)
-    parser_run.add_argument("-s", "--stage", action="append", type=int)
+    parser_run.add_argument("-s", "--stage", dest="stages", action="append", type=int)
     
 
     parser_run.add_argument("pipeline")
     parser_run.add_argument("workfile")
-    parser_run.add_argument("id")
     parser_run.set_defaults(func=run_pipeline)
 
     parser_list = subparsers.add_parser('list')

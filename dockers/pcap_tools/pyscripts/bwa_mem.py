@@ -17,7 +17,7 @@ def run_command(command=str):
 		raise Exception("Tool fail %s\n%s" % (stdout,stderr))
 	return (stdout,stderr)
 
-def timing(command_name)
+def timing(command_name):
 	date_cmd = r'date +%s'
 	run_command("%s >> %s_timing.txt" % (date_cmd,command_name))
 

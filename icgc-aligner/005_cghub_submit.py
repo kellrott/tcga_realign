@@ -5,10 +5,11 @@ from subprocess import Popen
 import string
 from glob import glob
 import os
+import uuid
     
 #just for initial debug, these will be filled in by the conf read
 #used currently primarily to test different paths, the destination repo server and study is the same (cghub prod:PCAWG_TEST)
-DEBUG_PYTHON="/pod/opt/bin/python"
+DEBUG_PYTHON="/pod/opt/bin/python" 
 DEBUG_SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_merged/dockers/pcap_tools/pyscripts"
 #DEBUG_UPLOAD_KEY="/pod/home/cwilks/JOSH_PAWG_stage.key"
 DEBUG_UPLOAD_KEY="/pod/home/cwilks/UCSC_PAWG.key"
@@ -38,7 +39,10 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     
     download_timing = params["%s_download_timing" % mode]
     merged_metrics = params["%s_merged_metrics" % mode]
-    merged_timing = "%s_merge_timing.txt" % BAM_FILE
+    #merged_metrics = params["%s.markdup.metrics" % UUID]
+    #merged_timing = "%s_merge_timing.txt" % BAM_FILE
+    #merged_timing = "PAWG.%s.bam_merge_timing.txt" % UUID
+    merged_timing = params["%s_merged_timing" % mode]
     #the submission directory
     CWD=os.getcwd()
     SUB_DIR="%s/%s.partial"%(CWD,UUID)
@@ -91,9 +95,9 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
         try:
             if debug:
                 #cmd = "%s %s/add_qc_results_to_metadata.pl %s/%s/analysis.xml %s" % (DEBUG_PERL,DEBUG_SCRIPT_DIR,SUB_DIR,NEW_UUID,QC_STATS_FILE)
-                cmd = "%s %s/add_qc_results_to_metadata.pl %s/%s/analysis.xml %s/%s %s %s %s %s" % (DEBUG_PERL,DEBUG_SCRIPT_DIR,SUB_DIR,NEW_UUID,params["debug_path"],mode,UUID,download_timing,merged_metrics,merged_timing)
+                cmd = "%s %s/add_qc_results_to_metadata.pl %s/%s/analysis.xml %s %s %s %s %s" % (DEBUG_PERL,DEBUG_SCRIPT_DIR,SUB_DIR,NEW_UUID,params["%s:aligned_bam_dir" % mode],params["%s:stats_dir" % mode],download_timing,merged_metrics,merged_timing)
             else:
-                cmd = "add_qc_results_to_metadata.pl %s/%s/analysis.xml %s %s %s %s %s" % (SUB_DIR,NEW_UUID,mode,UUID,download_timing,merged_metrics,merged_timing)
+                cmd = "add_qc_results_to_metadata.pl %s/%s/analysis.xml %s %s %s %s %s" % (SUB_DIR,NEW_UUID,params["%s:aligned_bam_dir" % mode],params["%s:stats_dir" % mode],download_timing,merged_metrics,merged_timing)
             (stdout,stderr)=run_command(cmd)
         except CalledProcessError as cpe:
             sys.stderr.write("CGHub QC stats/ICGC fields addition to metadata error\n")
@@ -120,9 +124,9 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     #if not os.path.exists( os.path.join(SUB_DIR,"SUBMIT_DONE") ):
         try:
             if debug:
-                cmd = "%s %s/cgsubmit -s %s -c %s -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,REPO_SERVER,DEBUG_UPLOAD_KEY,NEW_UUID)
+                cmd = "%s %s/cgsubmit_fixed -s %s -c %s -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,REPO_SERVER,DEBUG_UPLOAD_KEY,NEW_UUID)
             else:
-                cmd = "cgsubmit -c %s -u %s" % (UPLOAD_KEY,NEW_UUID)
+                cmd = "cgsubmit_fixed -c %s -u %s" % (UPLOAD_KEY,NEW_UUID)
             (stdout,stderr)=run_command(cmd, SUB_DIR)
         except CalledProcessError as cpe:
             sys.stderr.write("CGHub metadata submission error\n")
@@ -137,9 +141,9 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
         try:
             if debug:
                 #return
-                cmd = "%s %s/cgsubmit -s %s --validate-only -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,REPO_SERVER,NEW_UUID)
+                cmd = "%s %s/cgsubmit_fixed -s %s --validate-only -u %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,REPO_SERVER,NEW_UUID)
             else:
-                cmd = "cgsubmit --validate-only -u %s" % (NEW_UUID)
+                cmd = "cgsubmit_fixed --validate-only -u %s" % (NEW_UUID)
             (stdout,stderr)=run_command(cmd, SUB_DIR)
         except CalledProcessError as cpe:
             sys.stderr.write("CGHub metadata submission manifest recreation error\n")
@@ -171,7 +175,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     #print "finishing with the rename"        
     os.rename(SUB_DIR,FIN_DIR)
 
-def cghub_submit_normal(params):
+def cghub_submit_both(params):
     bas_file = "PCAWG.%s.bas" % ( params['normal_id'] )
     cghub_submit(UUID=params['normal_id'], 
         NEW_UUID=params['new_normal_id'],
@@ -183,10 +187,8 @@ def cghub_submit_normal(params):
         UPLOAD_KEY=UPLOAD_KEY,
         #QC_STATS_FILE=bas_file,
         mode="normal",
-        params=params,
-        debug=True)
+        params=params)
 
-def cghub_submit_tumor(params):
     bas_file = "PCAWG.%s.bas" % ( params['tumor_id'] )
     cghub_submit(UUID=params['tumor_id'], 
         NEW_UUID=params['new_tumor_id'],
@@ -197,13 +199,15 @@ def cghub_submit_tumor(params):
         MD5=params['tumor_merged'] + ".md5",
         UPLOAD_KEY=UPLOAD_KEY,
         mode="tumor",
-        params=params,
-        debug=True)
+        params=params)
+    
+    return []
 
 
 
 #STEPS=[realigned_bam_check,create_pawg_metadata,cgsubmit,gtupload]
-STEPS=[cghub_submit_normal,cghub_submit_tumor]
+#STEPS=[cghub_submit_normal,cghub_submit_tumor] #can't do it in parallel because cgsubmit creates a fixed temp directory
+STEPS=[cghub_submit_both] 
 RESUME=True
 STORE=False
 IMAGE="pcap_tools"
@@ -219,13 +223,17 @@ def main():
     params = {}
     params["debug_path"] = path
     #params[rg1+":aligned_bam"] = "/pod/home/cwilks/p/output/%s/out_%s.bam" % (TEST_UUID,rg1)
-    #params["%s_merged" % mode] = BAM_FILE
+    params["%s_merged_timing" % mode] = "%s/PAWG.%s.bam_merge_timing.txt" % (path,TEST_UUID)
     params["%s_download_timing" % mode] = "%s/%s_download_timing.txt" % (path,TEST_UUID)
     params["%s_merged_metrics" % mode] = "%s/%s.markdup.metrics" % (path,TEST_UUID)
+    params["%s:aligned_bam_dir" % mode] = "%s/%s" % (path,mode)
+    params["%s:stats_dir" % mode] = "%s/%s" % (path,mode)
 
     cghub_submit(UUID='%s' % TEST_UUID,
+                 NEW_UUID = str(uuid.uuid4()),
+                 #NEW_UUID='2e610b0d-0ac5-4e51-a46a-11b55955b097',
                  #NEW_UUID='d3afc141-bd34-41a5-bbab-4a65c3b0ec27',
-                 NEW_UUID='c48a703e-48bd-4a6a-8948-c64f87c9cb82',
+                 #NEW_UUID='c48a703e-48bd-4a6a-8948-c64f87c9cb82',
                  #NEW_UUID='c401159c-75ac-411a-bc74-4b9eaae5fd56', 
                  #NEW_UUID='d3d3aa8d-fab4-43e4-83c9-6102cdaf4ab1',
                  #NEW_UUID='b8acbf32-0867-488a-a4d9-984a33345536',

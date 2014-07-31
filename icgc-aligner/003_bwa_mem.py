@@ -36,6 +36,9 @@ class Aligner:
 		timing("%s_bwa" % output_path)
 		yield (self.input_name + ":aligned_bam", output_path)
 
+def bwa_dirs(params):
+    yield ("tumor:aligned_bam_dir","tumor")
+    yield ("normal:aligned_bam_dir","normal")
 
 def bwa_steps(params):
 	if not os.path.exists("tumor"):
@@ -45,10 +48,12 @@ def bwa_steps(params):
 		yield o.run
 	
 	if not os.path.exists("normal"):
-		os.mkdir("normal")	
+		os.mkdir("normal")
 	for rg in params['unaligned_normal_bams']:
 		o = Aligner(rg, "normal")
 		yield o.run
+	
+	yield bwa_dirs
 
 
 STEPS=bwa_steps
