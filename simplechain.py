@@ -339,7 +339,7 @@ def run_exec(args):
                 if not os.path.exists(params['outdir']):
                     os.mkdir(params['outdir'])
             else:
-                params['outdir'] = tempfile.mkdtemp(dir=workbasedir, prefix=name)
+                params['outdir'] = tempfile.mkdtemp(dir=workbasedir, prefix=name + "_")
 
             files = []
             os.chdir(params['outdir'])
