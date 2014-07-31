@@ -211,6 +211,7 @@ sub getMarkduplicatesMetrics {
     delete $metrics->{'estimated_library_size'}; # this is irrelevant
     
     push @{ $ret->{"markduplicates_metrics"} }, {"library" => $metrics->{'library'}, "metrics" => $metrics};
+    #push @{ $ret->{"markduplicates_metrics"} }, {"metrics" => $metrics};
   }
 
   return to_json $ret;

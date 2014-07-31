@@ -84,7 +84,11 @@ def gen_unaligned_bam(bam_filename, analysis_id, metadata, specimen_dict, work_d
     read_group_sam = os.path.join(output_dir, 'rg_header.sam')
 
     #get the read groups from the original sample level BAM
-    os.system("samtools view -H %s | grep \"@RG\" > %s" %(bam_filename, read_group_sam))
+    exit_code = os.system("set -e; set -o pipefail; samtools view -H %s | grep \"@RG\" > %s" %(bam_filename, read_group_sam))
+    if exit_code != 0:
+        print "Failure in bam splitting during read group extraction from %s" % bam_filename
+        return 1
+    
 
     rg_file = open(read_group_sam, "r")
 
