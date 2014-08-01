@@ -299,9 +299,12 @@ def run_install(args):
 
 def func_run(q, func, params):
     out = []
-    for fname, f in func(params):
-        out.append((fname,f))
-    q.put(out)
+    try:
+        for fname, f in func(params):
+            out.append((fname,f))
+        q.put(out)
+    except:
+        q.put(None)
 
 
 def run_exec(args):
@@ -361,6 +364,8 @@ def run_exec(args):
                 files = []
                 for p in procs:
                      o = q.get()
+                     if o is None:
+                         raise Exception("Child Failure")
                      files.extend(o)
                      p.join()
             except:
