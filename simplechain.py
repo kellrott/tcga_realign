@@ -303,8 +303,8 @@ def func_run(q, func, params):
         for fname, f in func(params):
             out.append((fname,f))
         q.put(out)
-    except:
-        q.put(None)
+    except Exception as exc:
+        q.put(exc)
 
 
 def run_exec(args):
@@ -364,8 +364,8 @@ def run_exec(args):
                 files = []
                 for p in procs:
                      o = q.get()
-                     if o is None:
-                         raise Exception("Child Failure")
+                     if isinstance(o, Exception):
+                         raise o
                      files.extend(o)
                      p.join()
             except:
