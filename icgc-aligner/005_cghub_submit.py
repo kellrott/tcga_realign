@@ -6,10 +6,10 @@ import string
 from glob import glob
 import os
 import uuid
-    
+
 #just for initial debug, these will be filled in by the conf read
 #used currently primarily to test different paths, the destination repo server and study is the same (cghub prod:PCAWG_TEST)
-DEBUG_PYTHON="/pod/opt/bin/python" 
+DEBUG_PYTHON="/pod/opt/bin/python"
 DEBUG_SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_merged/dockers/pcap_tools/pyscripts"
 #DEBUG_UPLOAD_KEY="/pod/home/cwilks/JOSH_PAWG_stage.key"
 DEBUG_UPLOAD_KEY="/pod/home/cwilks/UCSC_PAWG.key"
@@ -35,8 +35,8 @@ def run_command(command=str, cwd=None):
     return (stdout,stderr)
 
 #def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NORMAL_UUID, NEW_NORMAL_UUID, UPLOAD_KEY, mode, params, debug=False):
-def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_NORMAL_UUID, UPLOAD_KEY, mode, params, test=False, debug=False):
-    
+def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_NORMAL_UUID, UPLOAD_KEY, mode, params, test=0, debug=False):
+
     download_timing = params["%s_download_timing" % mode]
     merged_metrics = params["%s_merged_metrics" % mode]
     #merged_metrics = params["%s.markdup.metrics" % UUID]
@@ -51,7 +51,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     if os.path.exists(FIN_DIR):
         sys.stderr.write("Upload already FINISHED\n")
         sys.exit(0)
-    
+
     if not os.path.exists(SUB_DIR):
         os.mkdir(SUB_DIR)
 
@@ -68,15 +68,15 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     except CalledProcessError as cpe:
         sys.stderr.write("Realignment Check error\n")
         raise cpe
-    
-    NEW_UUID=NEW_UUID.rstrip()    
-    NORMAL_UUID=NORMAL_UUID.rstrip()    
+
+    NEW_UUID=NEW_UUID.rstrip()
+    NORMAL_UUID=NORMAL_UUID.rstrip()
     NEW_NORMAL_UUID=NEW_NORMAL_UUID.rstrip()
-    
+
     with open(MD5,"r") as md5f:
         md5=md5f.readline()
         md5=md5.rstrip()
-    
+
 #create cghub validating metadata with ICGC specific metadata added to it
     #if not os.path.exists("%s/%s" % (SUB_DIR,NEW_UUID)) or not os.path.exists("%s/%s" % (SUB_DIR,UUID)):
     #if not os.path.exists( os.path.join(SUB_DIR,NEW_UUID"trans.map") ):
@@ -111,7 +111,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
         with open( os.path.join(SUB_DIR,"MD_DONE"), "w" ) as outf:
             outf.write("metadata generated finished successfully\n")
 
-    #check submission state    
+    #check submission state
     try:
         if debug:
             cmd = "curl -sk %s/cghub/metadata/analysisDetail?analysis_id=%s | egrep -ie '<state>' | cut -d'>' -f 2 | cut -d\"<\" -f 1" % (REPO_SERVER,NEW_UUID)
@@ -122,6 +122,10 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     except CalledProcessError as cpe:
         sys.stderr.write("CGHub WSI query for state for %s failed\n" % (NEW_UUID))
         raise cpe
+
+    #if test level is 2 or above, quit before doing anything else
+    if test > 1:
+        return
 
     #not submitted yet
     if ( state is None or state == "" ) and not os.path.exists( os.path.join(SUB_DIR,"SUBMIT_DONE") ):
@@ -136,11 +140,11 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
         except CalledProcessError as cpe:
             sys.stderr.write("CGHub metadata submission error\n")
             raise cpe
-        
+
         #write sentinal value
         with open( os.path.join(SUB_DIR,"SUBMIT_DONE"), "w" ) as outf:
             outf.write("metadata submitted finished successfully\n")
-         
+
     #submitted but manifest file needed for upload is probably gone, recreate by doing a valiadtion only submission (indempotent)
     elif not os.path.exists( os.path.join(SUB_DIR,NEW_UUID,"manifest.xml") ):
         try:
@@ -161,7 +165,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
                 sys.stderr.write("CGHub gto deletion error\n")
                 raise cpe
 
-    #try to upload if in the right (or non-existent) state 
+    #try to upload if in the right (or non-existent) state
     if state is None or state == "" or state == "submitted" or state == "uploading":
         try:
             if debug:
@@ -178,41 +182,41 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
         raise CalledProcessError(1,"state not live: %s" % (state))
 
     #finally finish by renaming working dir
-    #print "finishing with the rename"        
+    #print "finishing with the rename"
     os.rename(SUB_DIR,FIN_DIR)
 
 def cghub_submit_both(params):
-    cghub_submit(UUID=params['normal_id'], 
+    cghub_submit(UUID=params['normal_id'],
         NEW_UUID=params['new_normal_id'],
         NORMAL_UUID=params['normal_id'],
         NEW_NORMAL_UUID=params['new_normal_id'],
-        ORIG_BAM_FILE=params['normal_bam'], 
+        ORIG_BAM_FILE=params['normal_bam'],
         BAM_FILE=params['normal_merged'],
         MD5=params['normal_merged'] + ".md5",
         UPLOAD_KEY=UPLOAD_KEY,
         mode="normal",
         params=params,
-        test=params.get('test',False))
+        test=params.get('test',0))
 
-    cghub_submit(UUID=params['tumor_id'], 
+    cghub_submit(UUID=params['tumor_id'],
         NEW_UUID=params['new_tumor_id'],
         NORMAL_UUID=params['tumor_id'],
         NEW_NORMAL_UUID=params['new_tumor_id'],
-        ORIG_BAM_FILE=params['tumor_bam'], 
+        ORIG_BAM_FILE=params['tumor_bam'],
         BAM_FILE=params['tumor_merged'],
         MD5=params['tumor_merged'] + ".md5",
         UPLOAD_KEY=UPLOAD_KEY,
         mode="tumor",
         params=params,
-        test=params.get('test',False))
-    
+        test=params.get('test',0))
+
     return []
 
 
 
 #STEPS=[realigned_bam_check,create_pawg_metadata,cgsubmit,gtupload]
 #STEPS=[cghub_submit_normal,cghub_submit_tumor] #can't do it in parallel because cgsubmit creates a fixed temp directory
-STEPS=[cghub_submit_both] 
+STEPS=[cghub_submit_both]
 RESUME=True
 STORE=False
 IMAGE="pcap_tools"
@@ -240,7 +244,7 @@ def main():
                  #NEW_UUID='2e610b0d-0ac5-4e51-a46a-11b55955b097',
                  #NEW_UUID='d3afc141-bd34-41a5-bbab-4a65c3b0ec27',
                  #NEW_UUID='c48a703e-48bd-4a6a-8948-c64f87c9cb82',
-                 #NEW_UUID='c401159c-75ac-411a-bc74-4b9eaae5fd56', 
+                 #NEW_UUID='c401159c-75ac-411a-bc74-4b9eaae5fd56',
                  #NEW_UUID='d3d3aa8d-fab4-43e4-83c9-6102cdaf4ab1',
                  #NEW_UUID='b8acbf32-0867-488a-a4d9-984a33345536',
                  #NEW_UUID='e62e9cf6-c04c-4a3b-bf27-df43845ff6c7',
