@@ -29,6 +29,7 @@ except ImportError:
 
 
 SCRIPT_PATH=os.path.abspath(__file__)
+ZOO_BASE="/simplechain/"
 
 logging.basicConfig(level=logging.INFO)
 
@@ -45,6 +46,9 @@ class Pipeline:
             self.data = json.loads(txt)
         self.base = os.path.abspath(base)
         self.name = os.path.basename(self.base)
+        self.ncpus = self.data.get('ncpus', 8)
+        self.outdir = os.path.join(self.base, self.data.get('outdir', 'out'))
+        self.mount = self.data.get('mount', {})
 
     def get_modules(self):
         modules = glob(os.path.join(self.base, "*.py"))
@@ -64,10 +68,12 @@ class BlankLease:
 
 def run_pipeline(args):
 
+    pipeline = Pipeline(args.pipeline)
+
     params = None
     with open(args.workfile) as handle:
         params = json.loads(handle.read())
-    params['ncpus'] = args.ncpus
+    params['ncpus'] = pipeline.ncpus
 
     if params is None:
         return
@@ -84,11 +90,11 @@ def run_pipeline(args):
         os.mkdir(iddir)
 
     #make sure the base output directory exists
-    if not os.path.exists(args.outdir):
-        os.mkdir(args.outdir)
+    if not os.path.exists(pipeline.outdir):
+        os.mkdir(pipeline.outdir)
 
     #make sure the output directory for this job exists
-    final_iddir = os.path.join(args.outdir, params['id'])
+    final_iddir = os.path.join(pipeline.outdir, params['id'])
     if not os.path.exists(final_iddir):
         os.mkdir(final_iddir)
 
@@ -114,7 +120,7 @@ def run_pipeline(args):
 
         #get the names of the working directory and the final output directory
         workdir = os.path.abspath(os.path.join(args.workdir,params['id'], name))
-        finaldir = os.path.abspath(os.path.join(args.outdir,params['id'], name))
+        finaldir = os.path.abspath(os.path.join(pipeline.outdir,params['id'], name))
 
         #load the module code
         logging.info("Checking for %s run for %s" % (params['id'], name))
@@ -132,42 +138,46 @@ def run_pipeline(args):
             files = []
             try:
                 with open(workdir + ".params", "w") as handle:
-                    handle.write(json.dumps({"base" : params, "merge" : params_merge}))
+                    handle.write(json.dumps({"id" : params['id'], "base" : params, "merge" : params_merge}))
 
                 # is the stage defines a 'CLUSTER_MAX' try to use zookeeper to
                 # obtain a lease for the work
                 semaphore = BlankLease()
-                if zk is not None and args.zbase is not None and hasattr(mod, "CLUSTER_MAX"):
-                    semaphore = zk.Semaphore(args.zbase + "/leases/" + name, max_leases=mod.CLUSTER_MAX)
+                if zk is not None and hasattr(mod, "CLUSTER_MAX"):
+                    semaphore = zk.Semaphore(ZOO_BASE + "/" + pipeline.name + "/leases/" + name, max_leases=mod.CLUSTER_MAX)
 
                 with semaphore:
+                    print "Execing"
                     if args.docker and hasattr(mod, "IMAGE"):
-                        data_mount = ""
-                        if args.data is not None:
-                            data_mount = " ".join( "-v %s" % (a) for a in args.data)
-                        cmd = "sudo docker run -i --rm -u %s \
-    -v %s:/pipeline/work \
-    -v %s:/pipeline/output \
-    -v %s:/pipeline/simple \
-    -v %s:/pipeline/code \
-    %s \
-    %s \
-    /pipeline/simple/simplechain.py exec /pipeline/code --workdir /pipeline/work --outdir /pipeline/output %s %s %s" % (
+                        mount_args = []
+                        for dst, src in pipeline.mount.items():
+                            mount_args.append( "-v %s:%s" % (src,dst))
+                        cmd = "docker run -i --rm -u %s \
+-v %s:/pipeline/work \
+-v %s:/pipeline/output \
+-v %s:/pipeline/simple \
+-v %s:/pipeline/code \
+%s \
+%s \
+/pipeline/simple/simplechain.py exec --workdir /pipeline/work /pipeline/code %s %s" % (
                             os.geteuid(),
                             os.path.abspath(args.workdir),
-                            os.path.abspath(args.outdir),
+                            os.path.abspath(pipeline.outdir),
                             os.path.dirname(os.path.abspath(__file__)),
                             os.path.abspath(args.pipeline),
-                            data_mount,
+                            " ".join(mount_args),
                             mod.IMAGE,
-                            params['id'], name,
+                            name,
                             os.path.join("/pipeline/work/", params['id'], name + ".params")
                         )
+                        if not args.skip_sudo:
+                            cmd = "sudo " + cmd
                     else:
                         cmd = "%s exec %s/params" % (__file__, workdir)
                     logging.info("Running: %s" % (cmd))
                     subprocess.check_call(cmd, shell=True)
             except:
+                traceback.print_exc()
                 if not hasattr(mod, "FAIL") or mod.FAIL != 'soft':
                     os.unlink(final_iddir + ".pid")
                     return 1
@@ -216,10 +226,9 @@ def run_build(args):
         subprocess.check_call(cmd, shell=True)
 
 def run_install(args):
-    if args.src is None:
-        srcs = glob(os.path.join(args.dir, "*"))
-    else:
-        srcs = [ os.path.join(args.dir, args.src) ]
+
+    pipeline = Pipeline(args.pipeline)
+    srcs = glob(os.path.join(pipeline.base, "images", "*"))
 
     for src_tar in srcs:
         src_name = re.sub(r'.tar$', '', os.path.basename(src_tar))
@@ -263,6 +272,7 @@ def run_exec(args):
     logging.info("Starting Exec")
 
     with open(args.params) as handle:
+        logging.info("Reading %s" % (args.params))
         txt = handle.read()
         params_all = json.loads(txt)
 
@@ -363,8 +373,9 @@ def zookeeper_init(args, fail=True):
     return zk
 
 def run_queue(args):
+    pipeline = Pipeline(args.pipeline)
     zk = zookeeper_init(args)
-    queue = zk.Queue(args.zbase + "queue")
+    queue = zk.Queue(ZOO_BASE + pipeline.name + "/queue")
 
     for job in args.jobs:
         with open(job) as handle:
@@ -379,19 +390,22 @@ def run_queue(args):
 
 
 def run_queue_list(args):
+    pipeline = Pipeline(args.pipeline)
     zk = zookeeper_init(args)
-    for c in zk.get_children(args.zbase + "/queue"):
-        txt, info = zk.get(args.zbase + "/queue/" + c)
+    for c in zk.get_children(ZOO_BASE + pipeline.name + "/queue"):
+        txt, info = zk.get(ZOO_BASE + pipeline.name + "/queue/" + c)
         data = json.loads(txt)
         print data['id']
     zk.stop()
 
 
 def run_client(args):
+    pipeline = Pipeline(args.pipeline)
     zk = zookeeper_init(args)
 
     workdir = tempfile.mkdtemp(dir=args.workdir, prefix="simplechain_client_")
-    queue = zk.Queue(args.zbase + "queue")
+    os.mkdir(os.path.join(workdir, "work"))
+    queue = zk.Queue(ZOO_BASE + pipeline.name + "/queue")
     while 1:
         item_txt = queue.get()
         if item_txt is None:
@@ -403,13 +417,13 @@ def run_client(args):
             handle.write(item_txt)
         cmd = [sys.executable, SCRIPT_PATH, "run",
             "-z", args.zookeeper,
-            "--zbase", args.zbase,
-            "--workdir", os.path.join(workdir, "work"),
-            "--outdir", os.path.join(workdir, "out"),
             "--docker",
-            "pipeline-name",
-            workfile ]
-        print " ".join(cmd)
+            "--workdir", os.path.join(workdir, "work")]
+        if args.skip_sudo:
+            cmd += ['--skip-sudo']
+        cmd += [pipeline.base, workfile ]
+        print "Running:" + " ".join(cmd)
+        subprocess.check_call(cmd)
         time.sleep(5)
 
     shutil.rmtree(workdir)
@@ -424,6 +438,7 @@ if __name__ == "__main__":
     parser_run.add_argument("-z", "--zookeeper", default=None)
     parser_run.add_argument("--workdir", default="work")
     parser_run.add_argument("--docker", action="store_true", default=False)
+    parser_run.add_argument("--skip-sudo", action="store_true", default=False)
     parser_run.add_argument("-s", "--stage", dest="stages", action="append", type=int)
     parser_run.add_argument("pipeline")
     parser_run.add_argument("workfile")
@@ -445,7 +460,6 @@ if __name__ == "__main__":
     parser_exec.add_argument("module_name")
     parser_exec.add_argument("params")
     parser_exec.add_argument("--workdir", default="work")
-    parser_exec.add_argument("--outdir", default="out")
     parser_exec.add_argument("--ncpus", type=int, default=8)
     parser_exec.set_defaults(func=run_exec)
 
@@ -463,6 +477,7 @@ if __name__ == "__main__":
     parser_client = subparsers.add_parser('client')
     parser_client.add_argument("-z", "--zookeeper", default="127.0.0.1:2181")
     parser_client.add_argument("--workdir", default="/tmp")
+    parser_client.add_argument("--skip-sudo", action="store_true", default=False)
     parser_client.add_argument("pipeline")
     parser_client.set_defaults(func=run_client)
 
