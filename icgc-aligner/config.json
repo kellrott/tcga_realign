@@ -1,0 +1,7 @@
+{
+    "mount" : {
+        "/keys" : "/pod/home/kellrott/keys/",
+        "/data" : "/pod/podstore/projects/PAWG/reference/"
+    },
+    "cpus" : 8
+}
