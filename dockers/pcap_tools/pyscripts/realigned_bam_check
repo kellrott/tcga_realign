@@ -215,8 +215,8 @@ def main():
         sys.exit(-1)
     
     if total_diff < 0:
-        sys.stderr.write("ERROR: total read counts in realigned bam are MORE (by %d, %s%% increase), then in original bam\n" % (abs(total_diff),str(float(100*abs(total_diff))/float(total1))))
-        sys.exit(-1)
+        sys.stderr.write("WARNING: total read counts in realigned bam are MORE (by %d, %s%% increase), then in original bam\n" % (abs(total_diff),str(float(100*abs(total_diff))/float(total1))))
+        #sys.exit(-1)
 
 if __name__ == '__main__':
     main()
