@@ -27,6 +27,16 @@ try:
 except ImportError:
     KazooClient = None
 
+try:
+    import tornado.ioloop
+    import tornado.web
+except ImportError:
+    tornado = None
+
+try:
+    import mako.template
+except ImportError:
+    mako = None
 
 SCRIPT_PATH=os.path.abspath(__file__)
 ZOO_BASE="/simplechain/"
@@ -54,6 +64,28 @@ class Pipeline:
         modules = glob(os.path.join(self.base, "*.py"))
         modules.sort()
         return modules
+
+def log_status(zk, pipeline, id, state, stage, params):
+    if zk is None:
+        return
+    meta = json.dumps({
+        'host' : socket.gethostname(),
+        'pid' : os.getpid(),
+        'state' : state,
+        'stage' : stage,
+    })
+    zk_path = ZOO_BASE + pipeline + "/status/" + id
+    zk.ensure_path(zk_path)
+    zk.set(zk_path, meta)
+
+    if stage is not None:
+        zk_stage_path = ZOO_BASE + pipeline + "/status/" + id + "/" + stage
+        stage_meta = json.dumps({
+            'state' : state,
+            'params' : params
+        })
+        zk.ensure_path(zk_stage_path)
+        zk.set(zk_stage_path, stage_meta)
 
 
 class BlankLease:
@@ -112,6 +144,8 @@ def run_pipeline(args):
 
     zk = zookeeper_init(args, False)
 
+    log_status(zk, pipeline=pipeline.name, id=params['id'], state='loading', stage=None, params=params)
+
     #start scanning across the modules
     modules = get_modules(args)
     for m in modules:
@@ -140,6 +174,8 @@ def run_pipeline(args):
                 with open(workdir + ".params", "w") as handle:
                     handle.write(json.dumps({"id" : params['id'], "base" : params, "merge" : params_merge}))
 
+                log_status(zk, pipeline=pipeline.name, id=params['id'], state='waiting', stage=name, params=params)
+
                 # is the stage defines a 'CLUSTER_MAX' try to use zookeeper to
                 # obtain a lease for the work
                 semaphore = BlankLease()
@@ -147,7 +183,7 @@ def run_pipeline(args):
                     semaphore = zk.Semaphore(ZOO_BASE + "/" + pipeline.name + "/leases/" + name, max_leases=mod.CLUSTER_MAX)
 
                 with semaphore:
-                    print "Execing"
+                    log_status(zk, pipeline=pipeline.name, id=params['id'], state='running', stage=name, params=params)
                     if args.docker and hasattr(mod, "IMAGE"):
                         mount_args = []
                         for dst, src in pipeline.mount.items():
@@ -175,10 +211,15 @@ def run_pipeline(args):
                     else:
                         cmd = "%s exec %s/params" % (__file__, workdir)
                     logging.info("Running: %s" % (cmd))
-                    subprocess.check_call(cmd, shell=True)
+                    with open(os.path.join(pipeline.outdir,params['id'],name+".stderr"), "w") as stderr_handle:
+                        with open(os.path.join(pipeline.outdir,params['id'],name+".stdout"), "w") as stdout_handle:
+                            subprocess.check_call(cmd, shell=True, stderr=stderr_handle, stdout=stdout_handle)
+                            log_status(zk, pipeline=pipeline.name, id=params['id'], state='complete', stage=name, params=params)
+
             except:
                 traceback.print_exc()
                 if not hasattr(mod, "FAIL") or mod.FAIL != 'soft':
+                    log_status(zk, pipeline=pipeline.name, id=params['id'], state='error', stage=name, params=params)
                     os.unlink(final_iddir + ".pid")
                     return 1
 
@@ -186,6 +227,7 @@ def run_pipeline(args):
             if os.path.exists( finaldir + ".error" ):
                 logging.error("Error found for %s run for %s" % (params['id'], name))
                 if not hasattr(mod, "FAIL") or mod.FAIL != 'soft':
+                    log_status(zk, pipeline=pipeline.name, id=params['id'], state='running', stage=name, params=params)
                     return 1
             logging.info("Results found for %s run for %s" % (params['id'], name))
 
@@ -197,6 +239,7 @@ def run_pipeline(args):
                 params_merge[name][row[0]] = row[1]
 
         print params, params_merge
+    log_status(zk, pipeline=pipeline.name, id=params['id'], state='complete', stage=None, params=params)
     os.unlink(final_iddir + ".pid")
 
 
@@ -431,6 +474,148 @@ def run_client(args):
     zk.stop()
 
 
+main_page="""<html>
+<head><title>${name}</title></head>
+<body>
+<div>
+    <div>Active</div>
+    <table>
+        <tr><td>ID</td><td>STATE</td></tr>
+    % for row in active:
+        ${makerow(['id', 'status'], row)}
+    % endfor
+    </table>
+</div>
+<div>
+    <div>Queued</div>
+    <table>
+        <tr><td>ID</td><td>PARAMS</td></tr>
+    % for row in queued:
+        ${makerow(['id', 'data'], row)}
+    % endfor
+    </table>
+</div>
+</body>
+</html>
+<%def name="makerow(order, row)">
+    <tr>
+    % for name in order:
+        <td>${row[name]}</td>
+    % endfor
+    </tr>
+</%def>
+"""
+
+status_page="""
+<html>
+<head><title>${name}</title></head>
+<body>
+    <div>ID</div><div>${id}</div>
+    <div>Host</div><div>${host}</div>
+    <div>State</div><div>${state}</div>
+    <div>Current Stage</div><div>${stage}</div>
+    <div>Stages</div>
+    % for s in stages:
+        ${s['name']} (${s['state']})
+    % endfor
+</body>
+</html>
+"""
+
+stage_page="""
+<html>
+<head><title>${name}</title></head>
+<body>
+    <div>STDOUT</div>
+    <pre>
+    ${stdout}
+    </pre>
+    <div>STDEDD</div>
+    <pre>
+    ${stderr}
+    </pre>
+</body>
+</html>
+"""
+
+
+def run_web(args):
+    if tornado is None:
+        raise Exception("tornado is not installed")
+
+    if mako is None:
+        raise Exception("mako is not installed")
+
+    pipeline = Pipeline(args.pipeline)
+    zk = zookeeper_init(args)
+
+    class MainHandler(tornado.web.RequestHandler):
+        def get(self):
+            active = []
+            for child in zk.get_children(ZOO_BASE + pipeline.name + "/status"):
+                txt, info = zk.get(ZOO_BASE + pipeline.name + "/status/" + child)
+                print txt
+                data = json.loads(txt)
+                active.append( {
+                    'id' : "<a href='/status/%s'>%s</a>" % (child,child),
+                    'status' : data.get('state', 'unknown'),
+                    'data' : json.dumps(data)
+                })
+            queued = []
+            for child in zk.get_children(ZOO_BASE + pipeline.name + "/queue"):
+                txt, info = zk.get(ZOO_BASE + pipeline.name + "/queue/" + child)
+                data = json.loads(txt)
+                queued.append( {
+                    'id' : data['id'],
+                    'data' : json.dumps(data)
+                })
+
+            self.write(mako.template.Template(main_page).render(name=pipeline.name, queued=queued, active=active))
+
+    class StatusHandler(tornado.web.RequestHandler):
+        def get(self, id):
+            txt, info = zk.get(ZOO_BASE + pipeline.name + "/status/" + id)
+            data = json.loads(txt)
+            stages = []
+            for stage_name in zk.get_children(ZOO_BASE + pipeline.name + "/status/" + id):
+                txt, info = zk.get(ZOO_BASE + pipeline.name + "/status/" + id + "/" + stage_name)
+                print txt
+                stage_data = json.loads(txt)
+                stages.append( {'name' : "<a href='%s/%s'>%s</a>" % (id, stage_name, stage_name), 'state' : stage_data['state']})
+            self.write(mako.template.Template(status_page).render(name=id, id=id, stages=stages, **data))
+
+    class StageHandler(tornado.web.RequestHandler):
+        def get(self, id, stage):
+
+            stdout = "NA"
+            stderr = "NA"
+
+            stderr_path = os.path.join(pipeline.outdir,id,stage + ".stderr")
+            stdout_path = os.path.join(pipeline.outdir,id,stage + ".stdout")
+
+            if os.path.exists(stderr_path):
+                with open(stderr_path) as handle:
+                    stderr = handle.read()
+
+            if os.path.exists(stdout_path):
+                with open(stdout_path) as handle:
+                    stdout = handle.read()
+
+            self.write(mako.template.Template(stage_page).render(name=id, id=id, stderr=stderr, stdout=stdout))
+
+
+    application = tornado.web.Application([
+        (r"/", MainHandler),
+        (r"/status/([^/]*)", StatusHandler),
+        (r"/status/([^/]*)/(.*)", StageHandler)
+    ])
+
+    application.listen(args.port)
+    tornado.ioloop.IOLoop.instance().start()
+
+
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("pipeline")
@@ -478,6 +663,10 @@ if __name__ == "__main__":
     parser_client.add_argument("--skip-sudo", action="store_true", default=False)
     parser_client.set_defaults(func=run_client)
 
+    parser_web = subparsers.add_parser('web')
+    parser_web.add_argument("-z", "--zookeeper", default="127.0.0.1:2181")
+    parser_web.add_argument("-p", "--port", type=int, default=8888)
+    parser_web.set_defaults(func=run_web)
 
     args = parser.parse_args()
     sys.exit(args.func(args))
