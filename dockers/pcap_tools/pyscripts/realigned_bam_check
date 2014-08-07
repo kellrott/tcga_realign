@@ -15,7 +15,7 @@ from subprocess import Popen
 from operator import itemgetter
 
 #PEARSON_CORR_MIN=0.9
-PEARSON_CORR_MIN=0.9
+PEARSON_CORR_MIN=0.97
 #if the number of alignments *in the new file* is lower than the old, allow a fuzz up to  and includingthis %
 MAX_READ_COUNT_PERCENT_DIFF=0.05
 
@@ -180,6 +180,7 @@ def main():
     
     #check total number
     total_diff = total1-total2
+    total_diff_percent = (float(total_diff)/float(total1))
     
     #do the diff counts check on mapped reads   
     diff = total_mapped1-total_mapped2
@@ -187,6 +188,7 @@ def main():
     
     sys.stdout.write("old=%d %d %d\n" % (total1,total_mapped1,total_unmapped1)) 
     sys.stdout.write("new=%d %d %d\n" % (total2,total_mapped2,total_unmapped2)) 
+    sys.stdout.write("diff total=%d %s\n" % (total_diff,str(total_diff_percent))) 
     sys.stdout.write("diff mapped=%d %s\n" % (diff,str(percent))) 
 
     all_counts1=[]
@@ -208,15 +210,17 @@ def main():
         sys.stdout.write("pearson=%s\n" % (str(pearson_corr_coef)))
         if pearson_corr_coef < PEARSON_CORR_MIN:
             sys.stderr.write("ERROR: Pearson Correlation Coefficient too low: %s < %s\n" % (str(pearson_corr_coef),str(PEARSON_CORR_MIN)))
-            sys.exit(-1)
+            #sys.exit(-1)
 
     if diff > 0 and percent > MAX_READ_COUNT_PERCENT_DIFF:
         sys.stderr.write("ERROR: mapped read counts are less in new alignment (%d), and by more than %d%%: %s%%\n" % (diff,int(100*MAX_READ_COUNT_PERCENT_DIFF),str(100*percent)))
         sys.exit(-1)
     
-    if total_diff < 0:
-        sys.stderr.write("WARNING: total read counts in realigned bam are MORE (by %d, %s%% increase), then in original bam\n" % (abs(total_diff),str(float(100*abs(total_diff))/float(total1))))
-        #sys.exit(-1)
+    if total_diff < 0 and abs(total_diff_percent) <= MAX_READ_COUNT_PERCENT_DIFF:
+        sys.stderr.write("WARNING: total read counts in realigned bam are MORE (by %d, %s%% increase), then in original bam but not greater than 5%%\n" % (abs(total_diff),str(float(100*abs(total_diff))/float(total1))))
+    if total_diff < 0 and abs(total_diff_percent) > MAX_READ_COUNT_PERCENT_DIFF:
+        sys.stderr.write("ERROR: total read counts in realigned bam are MORE (by %d, %s%% increase), then in original bam\n" % (abs(total_diff),str(float(100*abs(total_diff))/float(total1))))
+        sys.exit(-1)
 
 if __name__ == '__main__':
     main()
