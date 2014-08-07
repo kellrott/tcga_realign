@@ -210,7 +210,7 @@ def main():
         sys.stdout.write("pearson=%s\n" % (str(pearson_corr_coef)))
         if pearson_corr_coef < PEARSON_CORR_MIN:
             sys.stderr.write("ERROR: Pearson Correlation Coefficient too low: %s < %s\n" % (str(pearson_corr_coef),str(PEARSON_CORR_MIN)))
-            #sys.exit(-1)
+            sys.exit(-1)
 
     if diff > 0 and percent > MAX_READ_COUNT_PERCENT_DIFF:
         sys.stderr.write("ERROR: mapped read counts are less in new alignment (%d), and by more than %d%%: %s%%\n" % (diff,int(100*MAX_READ_COUNT_PERCENT_DIFF),str(100*percent)))
