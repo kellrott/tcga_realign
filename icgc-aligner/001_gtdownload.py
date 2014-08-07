@@ -44,3 +44,4 @@ STEPS=[gtdownload]
 RESUME=True
 STORE=False
 IMAGE="gtdownload"
+CLUSTER_MAX=2
