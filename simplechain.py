@@ -31,7 +31,7 @@ except ImportError:
 SCRIPT_PATH=os.path.abspath(__file__)
 ZOO_BASE="/simplechain/"
 
-logging.basicConfig(level=logging.INFO)
+#logging.basicConfig(level=logging.INFO)
 
 def get_modules(args):
     modules = glob(os.path.join(os.path.abspath(args.pipeline), "*.py"))
@@ -45,7 +45,7 @@ class Pipeline:
             txt = handle.read()
             self.data = json.loads(txt)
         self.base = os.path.abspath(base)
-        self.name = os.path.basename(self.base)
+        self.name = self.data.get('name', os.path.basename(self.base))
         self.ncpus = self.data.get('ncpus', 8)
         self.outdir = os.path.join(self.base, self.data.get('outdir', 'out'))
         self.mount = self.data.get('mount', {})
@@ -159,7 +159,7 @@ def run_pipeline(args):
 -v %s:/pipeline/code \
 %s \
 %s \
-/pipeline/simple/simplechain.py exec --workdir /pipeline/work /pipeline/code %s %s" % (
+/pipeline/simple/simplechain.py /pipeline/code exec --workdir /pipeline/work %s %s" % (
                             os.geteuid(),
                             os.path.abspath(args.workdir),
                             os.path.abspath(pipeline.outdir),
@@ -189,7 +189,7 @@ def run_pipeline(args):
                     return 1
             logging.info("Results found for %s run for %s" % (params['id'], name))
 
-        with open(os.path.join(args.outdir, params['id'], name + ".output")) as handle:
+        with open(os.path.join(pipeline.outdir, params['id'], name + ".output")) as handle:
             txt = handle.read()
             data = json.loads(txt)
             params_merge[name] = {}
@@ -271,6 +271,8 @@ def func_run(q, func, params):
 def run_exec(args):
     logging.info("Starting Exec")
 
+    pipeline = Pipeline(args.pipeline)
+
     with open(args.params) as handle:
         logging.info("Reading %s" % (args.params))
         txt = handle.read()
@@ -292,7 +294,7 @@ def run_exec(args):
         f, m_name, desc = imp.find_module(name, [os.path.dirname(m)])
         mod = imp.load_module(name, f, m_name, desc)
         workdir = os.path.abspath(os.path.join(args.workdir,work_id, name))
-        finaldir = os.path.abspath(os.path.join(args.outdir,work_id, name))
+        finaldir = os.path.abspath(os.path.join(pipeline.outdir,work_id, name))
 
         if name == args.module_name:
             #load the module code
@@ -347,7 +349,7 @@ def run_exec(args):
                 shutil.move(params['outdir'], finaldir)
             else:
                 shutil.move(params['outdir'], workdir)
-            with open(os.path.join(args.outdir, work_id, name + ".output"), "w") as handle:
+            with open(os.path.join(pipeline.outdir, work_id, name + ".output"), "w") as handle:
                 handle.write(json.dumps(files))
 
         else:
@@ -415,16 +417,15 @@ def run_client(args):
         workfile = os.path.join(workdir, item_data['id'])
         with open(workfile, "w") as handle:
             handle.write(item_txt)
-        cmd = [sys.executable, SCRIPT_PATH, "run",
+        cmd = [sys.executable, SCRIPT_PATH, pipeline.base, "run",
             "-z", args.zookeeper,
             "--docker",
             "--workdir", os.path.join(workdir, "work")]
         if args.skip_sudo:
             cmd += ['--skip-sudo']
-        cmd += [pipeline.base, workfile ]
+        cmd += [workfile ]
         print "Running:" + " ".join(cmd)
         subprocess.check_call(cmd)
-        time.sleep(5)
 
     shutil.rmtree(workdir)
     zk.stop()
@@ -432,6 +433,9 @@ def run_client(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("pipeline")
+
+
     subparsers = parser.add_subparsers(title="subcommand")
 
     parser_run = subparsers.add_parser('run')
@@ -440,23 +444,19 @@ if __name__ == "__main__":
     parser_run.add_argument("--docker", action="store_true", default=False)
     parser_run.add_argument("--skip-sudo", action="store_true", default=False)
     parser_run.add_argument("-s", "--stage", dest="stages", action="append", type=int)
-    parser_run.add_argument("pipeline")
     parser_run.add_argument("workfile")
     parser_run.set_defaults(func=run_pipeline)
 
     parser_build = subparsers.add_parser('build')
-    parser_build.add_argument("pipeline")
     parser_build.add_argument("--skip-sudo", action="store_true", default=False)
     parser_build.add_argument("-f", "--flush", action="store_true", default=False)
     parser_build.set_defaults(func=run_build)
 
     parser_install = subparsers.add_parser('install')
-    parser_install.add_argument("pipeline")
     parser_install.add_argument("--skip-sudo", action="store_true", default=False)
     parser_install.set_defaults(func=run_install)
 
     parser_exec = subparsers.add_parser('exec')
-    parser_exec.add_argument("pipeline")
     parser_exec.add_argument("module_name")
     parser_exec.add_argument("params")
     parser_exec.add_argument("--workdir", default="work")
@@ -465,20 +465,17 @@ if __name__ == "__main__":
 
     parser_queue = subparsers.add_parser('queue')
     parser_queue.add_argument("-z", "--zookeeper", default="127.0.0.1:2181")
-    parser_queue.add_argument("pipeline")
     parser_queue.add_argument("jobs", nargs="+")
     parser_queue.set_defaults(func=run_queue)
 
     parser_queue_list = subparsers.add_parser('queue-list')
     parser_queue_list.add_argument("-z", "--zookeeper", default="127.0.0.1:2181")
-    parser_queue_list.add_argument("pipeline")
     parser_queue_list.set_defaults(func=run_queue_list)
 
     parser_client = subparsers.add_parser('client')
     parser_client.add_argument("-z", "--zookeeper", default="127.0.0.1:2181")
     parser_client.add_argument("--workdir", default="/tmp")
     parser_client.add_argument("--skip-sudo", action="store_true", default=False)
-    parser_client.add_argument("pipeline")
     parser_client.set_defaults(func=run_client)
 
 
