@@ -448,6 +448,9 @@ def run_client(args):
     pipeline = Pipeline(args.pipeline)
     zk = zookeeper_init(args)
 
+    #make sure the base working directory exists
+    if not os.path.exists(args.workdir):
+        os.mkdir(args.workdir)
     workdir = tempfile.mkdtemp(dir=args.workdir, prefix="simplechain_client_")
     os.mkdir(os.path.join(workdir, "work"))
     queue = zk.Queue(ZOO_BASE + pipeline.name + "/queue")
@@ -628,6 +631,7 @@ if __name__ == "__main__":
     parser_run.add_argument("--workdir", default="work")
     parser_run.add_argument("--docker", action="store_true", default=False)
     parser_run.add_argument("--skip-sudo", action="store_true", default=False)
+    parser_run.add_argument("--clean", action="store_true", default=False)
     parser_run.add_argument("-s", "--stage", dest="stages", action="append", type=int)
     parser_run.add_argument("workfile")
     parser_run.set_defaults(func=run_pipeline)
