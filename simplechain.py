@@ -469,6 +469,8 @@ def run_client(args):
             "-z", args.zookeeper,
             "--docker",
             "--workdir", os.path.join(workdir, "work")]
+        if args.clean:
+            cmd += ['--clean']
         if args.skip_sudo:
             cmd += ['--skip-sudo']
         cmd += [workfile ]
@@ -672,6 +674,7 @@ if __name__ == "__main__":
     parser_web = subparsers.add_parser('web')
     parser_web.add_argument("-z", "--zookeeper", default="127.0.0.1:2181")
     parser_web.add_argument("-p", "--port", type=int, default=8888)
+    parser_web.add_argument("--clean", action="store_true", default=False)
     parser_web.set_defaults(func=run_web)
 
     args = parser.parse_args()
