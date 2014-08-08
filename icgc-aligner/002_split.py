@@ -16,7 +16,7 @@ def do_normal_split(params):
 	for bam in glob("normal/*.bam"):
 		base = os.path.basename(bam)
 		#the naming pattern is <uuid>_<readgroup>.cleaned.bam
-		n = re.sub(r'........-....-....-....-............_(.*).cleaned.bam', r'\1', base)
+		n = "normal_" + re.sub(r'........-....-....-....-............_(.*).cleaned.bam', r'\1', base)
 		if n is None or len(n) == 0:
 			n = base
 		yield (n + ":file", bam)
@@ -32,7 +32,7 @@ def do_tumor_split(params):
 	for bam in glob("tumor/*.bam"):
 		base = os.path.basename(bam)
 		#the naming pattern is <uuid>_<readgroup>.cleaned.bam
-		n = re.sub(r'........-....-....-....-............_(.*).cleaned.bam', r'\1', base)
+		n = "tumor_" + re.sub(r'........-....-....-....-............_(.*).cleaned.bam', r'\1', base)
 		if n is None or len(n) == 0:
 			n = base
 		yield (n + ":file", bam)
