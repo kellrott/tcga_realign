@@ -207,6 +207,7 @@ def check_read_group_consistency(original_bam,new_bam):
 	for pu in pus2:
             pu_ = pu.split(":")
             pu = pu_[-1]
+            pu = pu.replace('_','.')
             if pu not in pus1:
                 sys.stderr.write("ERROR: platform unit %s from realigned bam not present in original bam\n" % (pu))
                 sys.exit(-1)
