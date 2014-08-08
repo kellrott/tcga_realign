@@ -15,9 +15,11 @@ from subprocess import Popen
 from operator import itemgetter
 
 #PEARSON_CORR_MIN=0.9
-PEARSON_CORR_MIN=0.9
+PEARSON_CORR_MIN=0.99
 #if the number of alignments *in the new file* is lower than the old, allow a fuzz up to  and includingthis %
 MAX_READ_COUNT_PERCENT_DIFF=0.05
+#check for MORE reads in the new one, if more than 20% of the old one, fail
+MAX_READ_COUNT_OVER_PERCENT_DIFF=0.20
 
 parser=OptionParser()
 parser.add_option("-o", action="store",type='string',dest="original_bam",help="REQUIRED: full path andfilename of original BAM")
@@ -168,7 +170,48 @@ def pearson_corr(x, y):
 
     return diffprod / math.sqrt(xdiff2 * ydiff2)
 
+def extract_read_group_attributes_from_bam_header(filename):
+    #@RG     ID:5a543e4e-ce20-11e3-98bb-205ab09f1d05 PM:Illumina HiSeq 2000  CN:BCM  PU:BCM:120725_SN580_0236_BD13P0ACXX_2   DT:2012-08-14T17:00:00Z SM:9b6cd038-dee8-47b3-bd30-9a361a1f39ae PI:     LB:WGS:BCM:IWG_TREN.B2-4102-11A-N_2pB   PL:ILLUMINA
+    read_group_id_matcher = re.compile("ID:([^\s]+)")
+    #pm_matcher = re.compile("PM:([^\t]+)")
+    platform_unit_matcher = re.compile("PU:([^\t]+)")
+    lib_matcher = re.compile("LB:([^\t]+)")
+    center_matcher = re.compile("CN:([^\t]+)")
+    #pl_matcher = re.compile("PL:([^\t]+)")
+    matchers = [["read_group_id",read_group_id_matcher],["platform_unit",platform_unit_matcher],["library",lib_matcher],["center",center_matcher]]
+    
+    (stdout,stderr)=run_command("samtools view -H %s | grep \"^@RG\"" % (filename))
+    print stdout
+    rgs={}
+    pus={}
+    for line in stdout.split("\n"):
+        if len(line) < 1:
+            continue
+        line=line.rstrip()
+        rg={}
+        for (tag,matcher) in matchers:
+            m=matcher.search(line)
+            if m != None:
+                rg[tag]=m.group(1)
+                if tag == 'platform_unit':
+                    pus[rg[tag]]=1
+        rgs[rg["read_group_id"]]=rg
+    return pus
 
+def check_read_group_consistency(original_bam,new_bam):
+	#(pus1,centers1,libs1,ids1) = extract_read_group_attributes_from_bam_header(original_bam)
+	#(pus2,centers2,libs2,ids2) = extract_read_group_attributes_from_bam_header(new_bam)
+	pus1 = extract_read_group_attributes_from_bam_header(original_bam)
+	pus2 = extract_read_group_attributes_from_bam_header(new_bam)
+	
+	for pu in pus2:
+            pu_ = pu.split(":")
+            pu = pu_[-1]
+            pu = pu.replace('_','.')
+            if pu not in pus1:
+                sys.stderr.write("ERROR: platform unit %s from realigned bam not present in original bam\n" % (pu))
+                sys.exit(-1)
+                
 def main():
     #orig_fs_map=run_flagstat(ORIGINAL_BAM)
     #(fs_output,stderr)=run_command("cat %s" % ORIGINAL_BAM)
@@ -177,9 +220,12 @@ def main():
     #new_fs_map = process_flagstat(fs_output) 
     (total1,total_mapped1,total_unmapped1,orig_idxs) = run_idxstats(ORIGINAL_BAM,"%s/old_bam.idxstats"%(OUTPUT_DIR),False)
     (total2,total_mapped2,total_unmapped2,new_idxs) = run_idxstats(NEW_BAM,"%s/new_bam.idxstats"%(OUTPUT_DIR),False)
-    
+   
+    check_read_group_consistency(ORIGINAL_BAM,NEW_BAM)
+ 
     #check total number
     total_diff = total1-total2
+    total_diff_percent = (float(total_diff)/float(total1))
     
     #do the diff counts check on mapped reads   
     diff = total_mapped1-total_mapped2
@@ -187,6 +233,7 @@ def main():
     
     sys.stdout.write("old=%d %d %d\n" % (total1,total_mapped1,total_unmapped1)) 
     sys.stdout.write("new=%d %d %d\n" % (total2,total_mapped2,total_unmapped2)) 
+    sys.stdout.write("diff total=%d %s\n" % (total_diff,str(total_diff_percent))) 
     sys.stdout.write("diff mapped=%d %s\n" % (diff,str(percent))) 
 
     all_counts1=[]
@@ -214,9 +261,11 @@ def main():
         sys.stderr.write("ERROR: mapped read counts are less in new alignment (%d), and by more than %d%%: %s%%\n" % (diff,int(100*MAX_READ_COUNT_PERCENT_DIFF),str(100*percent)))
         sys.exit(-1)
     
-    if total_diff < 0:
-        sys.stderr.write("WARNING: total read counts in realigned bam are MORE (by %d, %s%% increase), then in original bam\n" % (abs(total_diff),str(float(100*abs(total_diff))/float(total1))))
-        #sys.exit(-1)
+    if total_diff < 0 and abs(total_diff_percent) <= MAX_READ_COUNT_OVER_PERCENT_DIFF:
+        sys.stderr.write("WARNING: total read counts in realigned bam are MORE (by %d, %s%% increase), then in original bam but not greater than 5%%\n" % (abs(total_diff),str(float(100*abs(total_diff))/float(total1))))
+    if total_diff < 0 and abs(total_diff_percent) > MAX_READ_COUNT_OVER_PERCENT_DIFF:
+        sys.stderr.write("ERROR: total read counts in realigned bam are MORE (by %d, %s%% increase), then in original bam\n" % (abs(total_diff),str(float(100*abs(total_diff))/float(total1))))
+        sys.exit(-1)
 
 if __name__ == '__main__':
     main()
