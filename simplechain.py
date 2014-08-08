@@ -213,9 +213,11 @@ def run_pipeline(args):
                     logging.info("Running: %s" % (cmd))
                     with open(os.path.join(pipeline.outdir,params['id'],name+".stderr"), "w") as stderr_handle:
                         with open(os.path.join(pipeline.outdir,params['id'],name+".stdout"), "w") as stdout_handle:
-                            subprocess.check_call(cmd, shell=True, stderr=stderr_handle, stdout=stdout_handle)
+                            proc = subprocess.Popen(cmd, shell=True, stderr=stderr_handle, stdout=stdout_handle)
+                            proc.communicate()
+                            if proc.returncode != 0:
+                                raise Exception("Call Failed: %s" % (cmd))
                             log_status(zk, pipeline=pipeline.name, id=params['id'], state='complete', stage=name, params=params)
-
             except:
                 traceback.print_exc()
                 if not hasattr(mod, "FAIL") or mod.FAIL != 'soft':
