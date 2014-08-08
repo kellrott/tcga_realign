@@ -87,6 +87,18 @@ def log_status(zk, pipeline, id, state, stage, params):
         zk.ensure_path(zk_stage_path)
         zk.set(zk_stage_path, stage_meta)
 
+def log_worker(zk, pipeline, workdir):
+    st=os.statvfs(workdir)
+    host = socket.gethostname()
+    meta = json.dumps({
+        'host' : host,
+        'pid' : os.getpid(),
+        'disk' : (st.f_bavail * st.f_frsize)
+    })
+    p = zk.create(ZOO_BASE + pipeline + "/workers/" + host, ephemeral=True, makepath=True )
+    zk.set(p, meta)
+
+
 
 class BlankLease:
     """
@@ -149,6 +161,7 @@ def run_pipeline(args):
     #start scanning across the modules
     modules = get_modules(args)
     for m in modules:
+        log_worker(zk, pipeline=pipeline.name, workdir=args.workdir)
         name = os.path.basename(m).replace(".py", "")
         stage = int(os.path.basename(m).split("_")[0])
 
