@@ -95,8 +95,10 @@ def log_worker(zk, pipeline, workdir):
         'pid' : os.getpid(),
         'disk' : (st.f_bavail * st.f_frsize)
     })
-    p = zk.create(ZOO_BASE + pipeline + "/workers/" + host, ephemeral=True, makepath=True )
-    zk.set(p, meta)
+    node_path = ZOO_BASE + pipeline + "/workers/" + host
+    if not zk.exists(node_path):
+        node_path = zk.create(node_path, ephemeral=True, makepath=True )
+    zk.set(node_path, meta)
 
 
 
@@ -255,6 +257,8 @@ def run_pipeline(args):
 
         print params, params_merge
     log_status(zk, pipeline=pipeline.name, id=params['id'], state='complete', stage=None, params=params)
+    if args.clean:
+        shutil.rmtree(os.path.abspath(os.path.join(args.workdir,params['id'])))
     os.unlink(final_iddir + ".pid")
 
 
@@ -489,8 +493,8 @@ def run_client(args):
         cmd += [workfile ]
         print "Running:" + " ".join(cmd)
         subprocess.check_call(cmd)
-
-    shutil.rmtree(workdir)
+    if args.clean:
+        shutil.rmtree(workdir)
     zk.stop()
 
 
@@ -682,12 +686,12 @@ if __name__ == "__main__":
     parser_client.add_argument("-z", "--zookeeper", default="127.0.0.1:2181")
     parser_client.add_argument("--workdir", default="/tmp")
     parser_client.add_argument("--skip-sudo", action="store_true", default=False)
+    parser_client.add_argument("--clean", action="store_true", default=False)
     parser_client.set_defaults(func=run_client)
 
     parser_web = subparsers.add_parser('web')
     parser_web.add_argument("-z", "--zookeeper", default="127.0.0.1:2181")
     parser_web.add_argument("-p", "--port", type=int, default=8888)
-    parser_web.add_argument("--clean", action="store_true", default=False)
     parser_web.set_defaults(func=run_web)
 
     args = parser.parse_args()
