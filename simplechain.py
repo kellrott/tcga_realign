@@ -21,6 +21,7 @@ import traceback
 import subprocess
 import multiprocessing
 import tarfile
+from StringIO import StringIO
 
 try:
     from kazoo.client import KazooClient
@@ -41,7 +42,7 @@ except ImportError:
 SCRIPT_PATH=os.path.abspath(__file__)
 ZOO_BASE="/simplechain/"
 
-#logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO)
 
 def get_modules(args):
     modules = glob(os.path.join(os.path.abspath(args.pipeline), "*.py"))
@@ -65,6 +66,20 @@ class Pipeline:
         modules.sort()
         return modules
 
+
+def check_status(zk, pipeline, id):
+    if zk is None:
+        return True
+    node_path = ZOO_BASE + pipeline + "/status/" + id
+    if not zk.exists( node_path ):
+        return True
+    txt, info = zk.get(node_path)
+    data = json.loads(txt)
+    if data['host'] != socket.gethostname():
+        return False
+    return True
+
+
 def log_status(zk, pipeline, id, state, stage, params):
     if zk is None:
         return
@@ -81,6 +96,7 @@ def log_status(zk, pipeline, id, state, stage, params):
     if stage is not None:
         zk_stage_path = ZOO_BASE + pipeline + "/status/" + id + "/" + stage
         stage_meta = json.dumps({
+            'host' : socket.gethostname(),
             'state' : state,
             'params' : params
         })
@@ -158,6 +174,9 @@ def run_pipeline(args):
 
     zk = zookeeper_init(args, False)
 
+    if not check_status(zk, pipeline=pipeline.name, id=params['id'] ):
+        raise Exception("Bad Job Assignment: %s %s" % (pipeline.name, params['id']))
+
     log_status(zk, pipeline=pipeline.name, id=params['id'], state='loading', stage=None, params=params)
 
     #start scanning across the modules
@@ -200,35 +219,30 @@ def run_pipeline(args):
                 with semaphore:
                     log_status(zk, pipeline=pipeline.name, id=params['id'], state='running', stage=name, params=params)
                     if args.docker and hasattr(mod, "IMAGE"):
-                        mount_args = []
+                        cmd = [
+                            "docker", "run", "--rm", "-u", str(os.geteuid()),
+                            "-v", "%s:/pipeline/work" % os.path.abspath(args.workdir),
+                            "-v", "%s:/pipeline/output" % os.path.abspath(pipeline.outdir),
+                            "-v", "%s:/pipeline/simple" % os.path.dirname(os.path.abspath(__file__)),
+                            "-v", "%s:/pipeline/code" % os.path.abspath(args.pipeline)
+                        ]
                         for dst, src in pipeline.mount.items():
-                            mount_args.append( "-v %s:%s" % (src,dst))
-                        cmd = "docker run -i --rm -u %s \
--v %s:/pipeline/work \
--v %s:/pipeline/output \
--v %s:/pipeline/simple \
--v %s:/pipeline/code \
-%s \
-%s \
-/pipeline/simple/simplechain.py /pipeline/code exec --workdir /pipeline/work %s %s" % (
-                            os.geteuid(),
-                            os.path.abspath(args.workdir),
-                            os.path.abspath(pipeline.outdir),
-                            os.path.dirname(os.path.abspath(__file__)),
-                            os.path.abspath(args.pipeline),
-                            " ".join(mount_args),
+                            cmd += ["-v", "%s:%s" % (src,dst)]
+                        cmd += [
                             mod.IMAGE,
-                            name,
+                            "/pipeline/simple/simplechain.py", "/pipeline/code",
+                            "exec", "--workdir", "/pipeline/work", name,
                             os.path.join("/pipeline/work/", params['id'], name + ".params")
-                        )
+                        ]
                         if not args.skip_sudo:
-                            cmd = "sudo " + cmd
+                            cmd = ["sudo"] + cmd
                     else:
-                        cmd = "%s exec %s/params" % (__file__, workdir)
-                    logging.info("Running: %s" % (cmd))
+                        raise Exception("I need to fix this")
+                    logging.info("Running: %s" % (" ".join(cmd)))
                     with open(os.path.join(pipeline.outdir,params['id'],name+".stderr"), "w") as stderr_handle:
                         with open(os.path.join(pipeline.outdir,params['id'],name+".stdout"), "w") as stdout_handle:
-                            proc = subprocess.Popen(cmd, shell=True, stderr=stderr_handle, stdout=stdout_handle)
+                            proc = subprocess.Popen(cmd, stderr=stderr_handle, stdout=stdout_handle, close_fds=True)
+                            print proc
                             proc.communicate()
                             if proc.returncode != 0:
                                 raise Exception("Call Failed: %s" % (cmd))
@@ -325,9 +339,11 @@ def func_run(q, func, params):
     try:
         for fname, f in func(params):
             out.append((fname,f))
-        q.put(out)
+        q.put( ('ok', out) )
     except Exception as exc:
-        q.put(exc)
+        f = StringIO()
+        traceback.print_exc(file=f)
+        q.put( ('error', f.getvalue(), exc) )
 
 
 def run_exec(args):
@@ -345,7 +361,6 @@ def run_exec(args):
     #get the names of the working directory and the final output directory
     workbasedir = os.path.abspath(os.path.join(args.workdir,work_id))
 
-
     params = params_all['base']
     params_merge = params_all['merge']
 
@@ -357,7 +372,7 @@ def run_exec(args):
         mod = imp.load_module(name, f, m_name, desc)
         workdir = os.path.abspath(os.path.join(args.workdir,work_id, name))
         finaldir = os.path.abspath(os.path.join(pipeline.outdir,work_id, name))
-
+        error_message = None
         if name == args.module_name:
             #load the module code
             odir = os.getcwd()
@@ -394,12 +409,16 @@ def run_exec(args):
                 files = []
                 for p in procs:
                      o = q.get()
-                     if isinstance(o, Exception):
-                         raise o
-                     files.extend(o)
+                     if o[0] == 'error':
+                         sys.stderr.write(o[1])
+                         error_message = o[1]
+                         raise o[2]
+                     files.extend(o[1])
                      p.join()
             except:
                 with open(finaldir + ".error", "w") as err_handle:
+                    if error_message is not None:
+                        err_handle.write(error_message)
                     traceback.print_exc(file=err_handle)
                     return 1
 
@@ -474,10 +493,10 @@ def run_client(args):
     os.mkdir(os.path.join(workdir, "work"))
     queue = zk.Queue(ZOO_BASE + pipeline.name + "/queue")
     while 1:
+        print "Getting Queue Item"
         item_txt = queue.get()
         if item_txt is None:
             break
-
         item_data = json.loads(item_txt)
         workfile = os.path.join(workdir, item_data['id'])
         with open(workfile, "w") as handle:
@@ -493,6 +512,7 @@ def run_client(args):
         cmd += [workfile ]
         print "Running:" + " ".join(cmd)
         subprocess.check_call(cmd)
+        print "Client Complete"
     if args.clean:
         shutil.rmtree(workdir)
     zk.stop()

@@ -1,17 +1,16 @@
 
-try:
-    import wikipedia
-except ImportError:
-    wikipedia = None
+import subprocess
 
-def wikidownload(params):
-    with open("text", "w") as handle:
-        txt = wikipedia.summary(params['article']).encode('ascii', 'ignore')
-        handle.write(txt)
-    yield (params['id']+":summary", "text")
+def infodownload(params):
+    subprocess.check_call("/cgquery analysis_id=%s > normal_data" % (params['normal_id']), shell=True)
+    subprocess.check_call("/cgquery analysis_id=%s > tumor_data" % (params['tumor_id']), shell=True)
 
-STEPS=[wikidownload]
+    yield ('normal_info', 'normal_data')
+    yield ('tumor_info', 'tumor_data')
+
+
+STEPS=[infodownload]
 RESUME=True
 STORE=False
-IMAGE="wikireader"
+IMAGE="test-chain-image"
 CLUSTER_MAX=2
