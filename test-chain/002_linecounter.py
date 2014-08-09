@@ -6,7 +6,8 @@ def do_normal_count(params):
         count = 0
         for line in handle:
             count += 1
-    time.sleep(30)
+        print count
+    time.sleep(3)
     return []
 
 def do_tumor_count(params):
@@ -14,6 +15,7 @@ def do_tumor_count(params):
         count = 0
         for line in handle:
             count += 1
+        print count
     time.sleep(3)
     return []
 

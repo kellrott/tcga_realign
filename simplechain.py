@@ -242,7 +242,6 @@ def run_pipeline(args):
                     with open(os.path.join(pipeline.outdir,params['id'],name+".stderr"), "w") as stderr_handle:
                         with open(os.path.join(pipeline.outdir,params['id'],name+".stdout"), "w") as stdout_handle:
                             proc = subprocess.Popen(cmd, stderr=stderr_handle, stdout=stdout_handle, close_fds=True)
-                            print proc
                             proc.communicate()
                             if proc.returncode != 0:
                                 raise Exception("Call Failed: %s" % (cmd))
