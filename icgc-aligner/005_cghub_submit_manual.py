@@ -36,7 +36,7 @@ def run_command(command=str, cwd=None):
     return (stdout,stderr)
 
 #def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NORMAL_UUID, NEW_NORMAL_UUID, UPLOAD_KEY, mode, params, debug=False):
-def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_NORMAL_UUID, UPLOAD_KEY, mode, params, test=0, debug=False):
+def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_NORMAL_UUID, UPLOAD_KEY, mode, params, test=0, debug=False,run_realignment_check=True):
 
     download_timing = params["%s_download_timing" % mode]
     merged_metrics = params["%s_merged_metrics" % mode]
@@ -56,8 +56,8 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     if not os.path.exists(SUB_DIR):
         os.mkdir(SUB_DIR)
 
-    #if not os.path.exists("%s/PCAWG.%s.bam" % (SUB_DIR,UUID)):
-    #    os.symlink(os.path.relpath(BAM_FILE, SUB_DIR),"%s/PCAWG.%s.bam"%(SUB_DIR,UUID))
+    if not os.path.exists("%s/PCAWG.%s.bam" % (SUB_DIR,UUID)):
+        os.symlink(os.path.relpath(BAM_FILE, SUB_DIR),"%s/PCAWG.%s.bam"%(SUB_DIR,UUID))
 
     #put metric compareing $ORIG_FILE and $BAM_FILE and save stats to $SUB_DIR
     try:
@@ -65,7 +65,8 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
             cmd = "%s %s/realigned_bam_check -o %s -n %s -p %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,ORIG_BAM_FILE,BAM_FILE,SUB_DIR)
         else:
             cmd = "realigned_bam_check -o %s -n %s -p %s" % (ORIG_BAM_FILE,BAM_FILE,SUB_DIR)
-        (stdout,stderr)=run_command(cmd)
+        if run_realignment_check:
+            (stdout,stderr)=run_command(cmd)
     except CalledProcessError as cpe:
         sys.stderr.write("Realignment Check error\n")
         raise cpe
@@ -83,6 +84,8 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     #if not os.path.exists( os.path.join(SUB_DIR,NEW_UUID"trans.map") ):
     if not os.path.exists( os.path.join(SUB_DIR,"MD_DONE") ):
         additional_test_options = ""
+        if not run_realignment_check:
+            additional_test_options = "-d analysis.pawg_check_template.xml"
         if test:
             #use the test template, goes to a different study
             additional_test_options = "-d analysis.pawg_template.test.xml"
@@ -225,6 +228,9 @@ IMAGE="pcap_tools"
 def main():
     params_file = sys.argv[1]
     mode = sys.argv[2]
+    run_realignment_check = True
+    if len(sys.argv) >= 4:
+        run_realignment_check = False
     jparams = {}
     with open(params_file,"r") as f:
         jparams = json.load(f)
@@ -247,7 +253,8 @@ def main():
                  mode=mode,
                  params=params,
                  test=False,
-                 debug=False)
+                 debug=False,
+                 run_realignment_check=run_realignment_check)
 
 
 if __name__ == '__main__':
