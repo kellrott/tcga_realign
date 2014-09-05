@@ -6,11 +6,12 @@ import string
 from glob import glob
 import os
 import uuid
+import json
 
 #just for initial debug, these will be filled in by the conf read
 #used currently primarily to test different paths, the destination repo server and study is the same (cghub prod:PCAWG_TEST)
 DEBUG_PYTHON="/pod/opt/bin/python"
-DEBUG_SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_merged/dockers/pcap_tools/pyscripts"
+DEBUG_SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_merged/icgc-aligner/dockers/pcap_tools/pyscripts"
 #DEBUG_UPLOAD_KEY="/pod/home/cwilks/JOSH_PAWG_stage.key"
 DEBUG_UPLOAD_KEY="/pod/home/cwilks/UCSC_PAWG.key"
 DEBUG_PERL="/pod/home/cwilks/p/myperl/perl"
@@ -35,7 +36,7 @@ def run_command(command=str, cwd=None):
     return (stdout,stderr)
 
 #def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, QC_STATS_FILE, NORMAL_UUID, NEW_NORMAL_UUID, UPLOAD_KEY, mode, params, debug=False):
-def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_NORMAL_UUID, UPLOAD_KEY, mode, params, test=0, debug=False):
+def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_NORMAL_UUID, UPLOAD_KEY, mode, params, test=0, debug=False,run_realignment_check=True):
 
     download_timing = params["%s_download_timing" % mode]
     merged_metrics = params["%s_merged_metrics" % mode]
@@ -64,10 +65,14 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
             cmd = "%s %s/realigned_bam_check -o %s -n %s -p %s" % (DEBUG_PYTHON,DEBUG_SCRIPT_DIR,ORIG_BAM_FILE,BAM_FILE,SUB_DIR)
         else:
             cmd = "realigned_bam_check -o %s -n %s -p %s" % (ORIG_BAM_FILE,BAM_FILE,SUB_DIR)
-        (stdout,stderr)=run_command(cmd)
+        if run_realignment_check:
+            (stdout,stderr)=run_command(cmd)
+            raise CalledProcessError(500,"bad test")
     except CalledProcessError as cpe:
         sys.stderr.write("Realignment Check error\n")
-        raise cpe
+        #now we upload to a the PCAWG_CHECK study instead of the full production PCAWG 2.0
+        run_realignment_check = False
+        #raise cpe
 
     NEW_UUID=NEW_UUID.rstrip()
     NORMAL_UUID=NORMAL_UUID.rstrip()
@@ -82,6 +87,8 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     #if not os.path.exists( os.path.join(SUB_DIR,NEW_UUID"trans.map") ):
     if not os.path.exists( os.path.join(SUB_DIR,"MD_DONE") ):
         additional_test_options = ""
+        if not run_realignment_check:
+            additional_test_options = "-d analysis.pawg_check_template.xml"
         if test:
             #use the test template, goes to a different study
             additional_test_options = "-d analysis.pawg_template.test.xml"
@@ -225,6 +232,7 @@ def main():
     #TEST_UUID='251916ec-f78e-4eae-99fe-ff802e3ce2fe'
     #this uuid is REAL tcga data, so only upload to production
     TEST_UUID='9b6cd038-dee8-47b3-bd30-9a361a1f39ae'
+    run_realignment_check = True
     path = "/pod/home/cwilks/p/output/%s" % TEST_UUID
     BAM_FILE='/pod/home/cwilks/p/output/%s/%s.bam' % (TEST_UUID,TEST_UUID)
     mode = 'normal'
@@ -240,15 +248,6 @@ def main():
 
     cghub_submit(UUID='%s' % TEST_UUID,
                  NEW_UUID = str(uuid.uuid4()),
-                 #NEW_UUID='a04a7f49-d962-4b05-a668-ff10b973eca1',
-                 #NEW_UUID='2e610b0d-0ac5-4e51-a46a-11b55955b097',
-                 #NEW_UUID='d3afc141-bd34-41a5-bbab-4a65c3b0ec27',
-                 #NEW_UUID='c48a703e-48bd-4a6a-8948-c64f87c9cb82',
-                 #NEW_UUID='c401159c-75ac-411a-bc74-4b9eaae5fd56',
-                 #NEW_UUID='d3d3aa8d-fab4-43e4-83c9-6102cdaf4ab1',
-                 #NEW_UUID='b8acbf32-0867-488a-a4d9-984a33345536',
-                 #NEW_UUID='e62e9cf6-c04c-4a3b-bf27-df43845ff6c7',
-                 #NEW_UUID='266cec33-e253-41c9-9e1a-2a00205acd0a',
                  NORMAL_UUID='a0963407-05e7-4c84-bfe0-34aacac08eed',
                  NEW_NORMAL_UUID='97112394-e3e6-4bf4-b4a6-6251fd80c711',
                  ORIG_BAM_FILE='/pod/home/cwilks/p/input/%s/%s.bam' % (TEST_UUID,TEST_UUID),
@@ -259,7 +258,8 @@ def main():
                  mode=mode,
                  params=params,
                  test=True,
-                 debug=True)
+                 debug=True,
+                 run_realignment_check=run_realignment_check)
 
 
 if __name__ == '__main__':
