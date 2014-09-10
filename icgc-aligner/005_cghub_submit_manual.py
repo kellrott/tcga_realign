@@ -236,11 +236,11 @@ def main():
         jparams = json.load(f)
     params = jparams['base']      
      
-    params["%s_merged_timing" % mode] = jparams['merge']['004_merge_stats']["%s_merged_timing" % mode]
-    params["%s_download_timing" % mode] = jparams['merge']['001_gtdownload']["%s_download_timing" % mode]
-    params["%s_merged_metrics" % mode] = jparams['merge']['004_merge_stats']["%s_merged_metrics" % mode]
-    params["%s:aligned_bam_dir" % mode] = jparams['merge']['003_bwa_mem']["%s:aligned_bam_dir" % mode]
-    params["%s:stats_dir" % mode] = jparams['merge']['004_merge_stats']["%s:stats_dir" % mode]
+    params["%s_merged_timing" % mode] = "%s/%s" % ("../004_merge_stats",jparams['merge']['004_merge_stats']["%s_merged_timing" % mode])
+    params["%s_download_timing" % mode] = "%s/%s" % ("../001_gtdownload",jparams['merge']['001_gtdownload']["%s_download_timing" % mode])
+    params["%s_merged_metrics" % mode] = "%s/%s" % ("../004_merge_stats",jparams['merge']['004_merge_stats']["%s_merged_metrics" % mode])
+    params["%s:aligned_bam_dir" % mode] = "%s/%s" % ("../003_bwa_mem",jparams['merge']['003_bwa_mem']["%s:aligned_bam_dir" % mode])
+    params["%s:stats_dir" % mode] = "%s/%s" % ("../004_merge_stats",jparams['merge']['004_merge_stats']["%s:stats_dir" % mode])
 
     cghub_submit(UUID=params["%s_id" % mode],
                  NEW_UUID = params["new_%s_id" % mode],
