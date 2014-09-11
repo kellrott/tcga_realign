@@ -11,7 +11,7 @@ import json
 #just for initial debug, these will be filled in by the conf read
 #used currently primarily to test different paths, the destination repo server and study is the same (cghub prod:PCAWG_TEST)
 DEBUG_PYTHON="/pod/opt/bin/python"
-DEBUG_SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_merged/icgc-aligner/dockers/pcap_tools/pyscripts"
+DEBUG_SCRIPT_DIR="/pod/home/cwilks/p/tcga_realign_merged/dockers/pcap_tools/pyscripts"
 #DEBUG_UPLOAD_KEY="/pod/home/cwilks/JOSH_PAWG_stage.key"
 DEBUG_UPLOAD_KEY="/pod/home/cwilks/UCSC_PAWG.key"
 DEBUG_PERL="/pod/home/cwilks/p/myperl/perl"
@@ -51,8 +51,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
 
     if os.path.exists(FIN_DIR):
         sys.stderr.write("Upload already FINISHED\n")
-        #sys.exit(0)
-        raise Exception("Upload already FINISHED")
+        sys.exit(0)
 
     if not os.path.exists(SUB_DIR):
         os.mkdir(SUB_DIR)
@@ -68,12 +67,9 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
             cmd = "realigned_bam_check -o %s -n %s -p %s" % (ORIG_BAM_FILE,BAM_FILE,SUB_DIR)
         if run_realignment_check:
             (stdout,stderr)=run_command(cmd)
-            raise CalledProcessError(500,"bad test")
     except CalledProcessError as cpe:
         sys.stderr.write("Realignment Check error\n")
-        #now we upload to a the PCAWG_CHECK study instead of the full production PCAWG 2.0
-        run_realignment_check = False
-        #raise cpe
+        raise cpe
 
     NEW_UUID=NEW_UUID.rstrip()
     NORMAL_UUID=NORMAL_UUID.rstrip()
@@ -230,36 +226,34 @@ STORE=False
 IMAGE="pcap_tools"
 
 def main():
-    #TEST_UUID='251916ec-f78e-4eae-99fe-ff802e3ce2fe'
-    #this uuid is REAL tcga data, so only upload to production
-    TEST_UUID='9b6cd038-dee8-47b3-bd30-9a361a1f39ae'
+    params_file = sys.argv[1]
+    mode = sys.argv[2]
     run_realignment_check = True
-    path = "/pod/home/cwilks/p/output/%s" % TEST_UUID
-    BAM_FILE='/pod/home/cwilks/p/output/%s/%s.bam' % (TEST_UUID,TEST_UUID)
-    mode = 'normal'
+    if len(sys.argv) >= 4:
+        run_realignment_check = False
+    jparams = {}
+    with open(params_file,"r") as f:
+        jparams = json.load(f)
+    params = jparams['base']      
+     
+    params["%s_merged_timing" % mode] = "%s/%s" % ("../004_merge_stats",jparams['merge']['004_merge_stats']["%s_merged_timing" % mode])
+    params["%s_download_timing" % mode] = "%s/%s" % ("../001_gtdownload",jparams['merge']['001_gtdownload']["%s_download_timing" % mode])
+    params["%s_merged_metrics" % mode] = "%s/%s" % ("../004_merge_stats",jparams['merge']['004_merge_stats']["%s_merged_metrics" % mode])
+    params["%s:aligned_bam_dir" % mode] = "%s/%s" % ("../003_bwa_mem",jparams['merge']['003_bwa_mem']["%s:aligned_bam_dir" % mode])
+    params["%s:stats_dir" % mode] = "%s/%s" % ("../004_merge_stats",jparams['merge']['004_merge_stats']["%s:stats_dir" % mode])
 
-    params = {}
-    params["debug_path"] = path
-    #params[rg1+":aligned_bam"] = "/pod/home/cwilks/p/output/%s/out_%s.bam" % (TEST_UUID,rg1)
-    params["%s_merged_timing" % mode] = "%s/PAWG.%s.bam_merge_timing.txt" % (path,TEST_UUID)
-    params["%s_download_timing" % mode] = "%s/%s_download_timing.txt" % (path,TEST_UUID)
-    params["%s_merged_metrics" % mode] = "%s/%s.markdup.metrics" % (path,TEST_UUID)
-    params["%s:aligned_bam_dir" % mode] = "%s/%s" % (path,mode)
-    params["%s:stats_dir" % mode] = "%s/%s" % (path,mode)
-
-    cghub_submit(UUID='%s' % TEST_UUID,
-                 NEW_UUID = str(uuid.uuid4()),
-                 NORMAL_UUID='a0963407-05e7-4c84-bfe0-34aacac08eed',
-                 NEW_NORMAL_UUID='97112394-e3e6-4bf4-b4a6-6251fd80c711',
-                 ORIG_BAM_FILE='/pod/home/cwilks/p/input/%s/%s.bam' % (TEST_UUID,TEST_UUID),
-                 BAM_FILE=BAM_FILE,
-                 MD5='/pod/home/cwilks/p/output/%s/%s.bam.md5' % (TEST_UUID,TEST_UUID),
-                 #QC_STATS_FILE='/pod/home/cwilks/p/output/%s/%s.bam.bas' % (TEST_UUID,TEST_UUID),
+    cghub_submit(UUID=params["%s_id" % mode],
+                 NEW_UUID = params["new_%s_id" % mode],
+                 NORMAL_UUID=params["normal_id"],
+                 NEW_NORMAL_UUID=params["new_normal_id"],
+                 ORIG_BAM_FILE="%s/%s" % ("../001_gtdownload",jparams['merge']['001_gtdownload']["%s_bam" % mode]),
+                 BAM_FILE="%s/%s" % ("../004_merge_stats",jparams['merge']['004_merge_stats']["%s_merged" % mode]),
+                 MD5="%s/%s" % ("../004_merge_stats",jparams['merge']['004_merge_stats']["%s_merged" % mode] + ".md5"),
                  UPLOAD_KEY=UPLOAD_KEY,
                  mode=mode,
                  params=params,
-                 test=True,
-                 debug=True,
+                 test=False,
+                 debug=False,
                  run_realignment_check=run_realignment_check)
 
 
