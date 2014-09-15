@@ -134,7 +134,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     #if test level is 2 or above, quit before doing anything else
     if test > 1:
         return
-    return
+    
     #not submitted yet
     if ( state is None or state == "" ) and not os.path.exists( os.path.join(SUB_DIR,"SUBMIT_DONE") ):
     #if not os.path.exists( os.path.join(SUB_DIR,"SUBMIT_DONE") ):
