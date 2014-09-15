@@ -67,8 +67,9 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
         else:
             cmd = "realigned_bam_check -o %s -n %s -p %s" % (ORIG_BAM_FILE,BAM_FILE,SUB_DIR)
         if run_realignment_check:
+            sys.stderr.write("running the realignment_check\n")
             (stdout,stderr)=run_command(cmd)
-            raise CalledProcessError(500,"bad test")
+            #raise CalledProcessError(500,"bad test")
     except CalledProcessError as cpe:
         sys.stderr.write("Realignment Check error\n")
         #now we upload to a the PCAWG_CHECK study instead of the full production PCAWG 2.0
@@ -90,7 +91,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
         additional_test_options = ""
         if not run_realignment_check:
             additional_test_options = "-d analysis.pawg_check_template.xml"
-        if test:
+        if test > 0:
             #use the test template, goes to a different study
             additional_test_options = "-d analysis.pawg_template.test.xml"
         try:
@@ -134,7 +135,7 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
     #if test level is 2 or above, quit before doing anything else
     if test > 1:
         return
-
+    
     #not submitted yet
     if ( state is None or state == "" ) and not os.path.exists( os.path.join(SUB_DIR,"SUBMIT_DONE") ):
     #if not os.path.exists( os.path.join(SUB_DIR,"SUBMIT_DONE") ):
@@ -258,7 +259,7 @@ def main():
                  UPLOAD_KEY=UPLOAD_KEY,
                  mode=mode,
                  params=params,
-                 test=True,
+                 test=0,
                  debug=True,
                  run_realignment_check=run_realignment_check)
 
