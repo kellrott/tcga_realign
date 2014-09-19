@@ -75,12 +75,12 @@ def check_status(zk, pipeline, id):
         return True
     txt, info = zk.get(node_path)
     data = json.loads(txt)
-    if data['host'] != socket.gethostname():
+    if 'host' in data and data['host'] is not None and data['host'] != socket.gethostname():
         return False
     return True
 
 
-def log_status(zk, pipeline, id, state, stage, params):
+def log_status(zk, pipeline, id, workdir, state, stage, params):
     if zk is None:
         return
     meta = json.dumps({
@@ -88,6 +88,7 @@ def log_status(zk, pipeline, id, state, stage, params):
         'pid' : os.getpid(),
         'state' : state,
         'stage' : stage,
+        'workdir' : workdir
     })
     zk_path = ZOO_BASE + pipeline + "/status/" + id
     zk.ensure_path(zk_path)
@@ -103,13 +104,14 @@ def log_status(zk, pipeline, id, state, stage, params):
         zk.ensure_path(zk_stage_path)
         zk.set(zk_stage_path, stage_meta)
 
-def log_worker(zk, pipeline, workdir):
+def log_worker(zk, pipeline, workdir, job_id):
     st=os.statvfs(workdir)
     host = socket.gethostname()
     meta = json.dumps({
         'host' : host,
         'pid' : os.getpid(),
-        'disk' : (st.f_bavail * st.f_frsize)
+        'disk' : (st.f_bavail * st.f_frsize),
+        'job_id' : job_id
     })
     node_path = ZOO_BASE + pipeline + "/workers/" + host
     if not zk.exists(node_path):
@@ -177,12 +179,12 @@ def run_pipeline(args):
     if not check_status(zk, pipeline=pipeline.name, id=params['id'] ):
         raise Exception("Bad Job Assignment: %s %s" % (pipeline.name, params['id']))
 
-    log_status(zk, pipeline=pipeline.name, id=params['id'], state='loading', stage=None, params=params)
+    log_status(zk, pipeline=pipeline.name, id=params['id'], state='loading', workdir=args.workdir, stage=None, params=params)
 
     #start scanning across the modules
     modules = get_modules(args)
     for m in modules:
-        log_worker(zk, pipeline=pipeline.name, workdir=args.workdir)
+        log_worker(zk, pipeline=pipeline.name, workdir=args.workdir, job_id=params['id'])
         name = os.path.basename(m).replace(".py", "")
         stage = int(os.path.basename(m).split("_")[0])
 
@@ -208,7 +210,7 @@ def run_pipeline(args):
                 with open(workdir + ".params", "w") as handle:
                     handle.write(json.dumps({"id" : params['id'], "base" : params, "merge" : params_merge}))
 
-                log_status(zk, pipeline=pipeline.name, id=params['id'], state='waiting', stage=name, params=params)
+                log_status(zk, pipeline=pipeline.name, id=params['id'], workdir=args.workdir, state='waiting', stage=name, params=params)
 
                 # is the stage defines a 'CLUSTER_MAX' try to use zookeeper to
                 # obtain a lease for the work
@@ -217,7 +219,7 @@ def run_pipeline(args):
                     semaphore = zk.Semaphore(ZOO_BASE + "/" + pipeline.name + "/leases/" + name, max_leases=mod.CLUSTER_MAX)
 
                 with semaphore:
-                    log_status(zk, pipeline=pipeline.name, id=params['id'], state='running', stage=name, params=params)
+                    log_status(zk, pipeline=pipeline.name, id=params['id'], workdir=args.workdir, state='running', stage=name, params=params)
                     if args.docker and hasattr(mod, "IMAGE"):
                         cmd = [
                             "docker", "run", "--rm", "-u", str(os.geteuid()),
@@ -245,11 +247,11 @@ def run_pipeline(args):
                             proc.communicate()
                             if proc.returncode != 0:
                                 raise Exception("Call Failed: %s" % (cmd))
-                            log_status(zk, pipeline=pipeline.name, id=params['id'], state='complete', stage=name, params=params)
+                            log_status(zk, pipeline=pipeline.name, id=params['id'], workdir=args.workdir, state='complete', stage=name, params=params)
             except:
                 traceback.print_exc()
                 if not hasattr(mod, "FAIL") or mod.FAIL != 'soft':
-                    log_status(zk, pipeline=pipeline.name, id=params['id'], state='error', stage=name, params=params)
+                    log_status(zk, pipeline=pipeline.name, id=params['id'], workdir=args.workdir, state='error', stage=name, params=params)
                     os.unlink(final_iddir + ".pid")
                     return 1
 
@@ -257,7 +259,7 @@ def run_pipeline(args):
             if os.path.exists( finaldir + ".error" ):
                 logging.error("Error found for %s run for %s" % (params['id'], name))
                 if not hasattr(mod, "FAIL") or mod.FAIL != 'soft':
-                    log_status(zk, pipeline=pipeline.name, id=params['id'], state='running', stage=name, params=params)
+                    log_status(zk, pipeline=pipeline.name, id=params['id'], workdir=args.workdir, state='running', stage=name, params=params)
                     return 1
             logging.info("Results found for %s run for %s" % (params['id'], name))
 
@@ -268,8 +270,8 @@ def run_pipeline(args):
             for row in data:
                 params_merge[name][row[0]] = row[1]
 
-        print params, params_merge
-    log_status(zk, pipeline=pipeline.name, id=params['id'], state='complete', stage=None, params=params)
+        #print params, params_merge
+    log_status(zk, pipeline=pipeline.name, id=params['id'], workdir=args.workdir, state='complete', stage=None, params=params)
     if args.clean:
         shutil.rmtree(os.path.abspath(os.path.join(args.workdir,params['id'])))
     os.unlink(final_iddir + ".pid")
@@ -324,14 +326,14 @@ def run_install(args):
             if tmp[0] == tag and tmp[1] == rev and tmp[2] == rev_value:
                 found = True
         if not found:
-            print "Installing %s" % (src_name)
+            logging.info( "Installing %s" % (src_name) )
             cmd = "docker load"
             if not args.skip_sudo:
                 cmd = "sudo " + cmd
             cmd = "cat %s | %s" % (src_tar, cmd)
             subprocess.check_call(cmd, shell=True)
         else:
-            print "Already Installed: %s" % (src_name)
+            logging.info( "Already Installed: %s" % (src_name) )
 
 def func_run(q, func, params):
     out = []
@@ -401,7 +403,7 @@ def run_exec(args):
                     p = multiprocessing.Process(target=func_run, args=(q,func,params,))
                     p.start()
                     procs.append(p)
-                    print "Count",  sum( list( a.is_alive() for a in procs) )
+                    #print "Count",  sum( list( a.is_alive() for a in procs) )
                     while sum( list( a.is_alive() for a in procs) ) >= args.ncpus:
                         time.sleep(1)
 
@@ -463,13 +465,38 @@ def run_queue(args):
         with open(job) as handle:
             txt = handle.read()
             try:
-                json.loads(txt)
-                print "queuing", txt
-                queue.put(txt)
+                meta = json.loads(txt)
+                if not zk.exists(ZOO_BASE + pipeline.name + "/status/" + meta['id']):
+                    print "queuing", meta['id']
+                    queue.put(txt)
+                else:
+                    print "already queued", meta['id']
             except ValueError:
                 print "Invalid file"
     zk.stop()
 
+def run_reset(args):
+    pipeline = Pipeline(args.pipeline)
+    zk = zookeeper_init(args)
+    
+    txt, info = zk.get(ZOO_BASE + pipeline.name + "/status/" + args.jobid)
+    data = json.loads(txt)
+    
+    for c in zk.get_children(ZOO_BASE + pipeline.name + "/status/" + args.jobid):
+        txt, info = zk.get(ZOO_BASE + pipeline.name + "/status/" + args.jobid + "/" + c)
+        print txt
+    
+    print data
+    
+    queue = zk.Queue(ZOO_BASE + pipeline.name + "/queue")
+
+def run_delete(args):
+    pipeline = Pipeline(args.pipeline)
+    zk = zookeeper_init(args)    
+    for job in args.jobs:
+        zk.delete( ZOO_BASE + pipeline.name + "/status/" + job, recursive=True )
+    zk.stop()
+    
 
 def run_queue_list(args):
     pipeline = Pipeline(args.pipeline)
@@ -480,6 +507,23 @@ def run_queue_list(args):
         print data['id']
     zk.stop()
 
+def run_status_list(args):
+    pipeline = Pipeline(args.pipeline)
+    zk = zookeeper_init(args)
+    for c in zk.get_children(ZOO_BASE + pipeline.name + "/status"):
+        txt, info = zk.get(ZOO_BASE + pipeline.name + "/status/" + c)
+        data = json.loads(txt)
+        print "\t".join( [c, data['state'], str(data['stage']), data['host']] )
+    zk.stop()
+
+def run_worker_list(args):
+    pipeline = Pipeline(args.pipeline)
+    zk = zookeeper_init(args)
+    for c in zk.get_children(ZOO_BASE + pipeline.name + "/workers"):
+        txt, info = zk.get(ZOO_BASE + pipeline.name + "/workers/" + c)
+        data = json.loads(txt)
+        print "\t".join( [c, str(data['disk'])] )
+    zk.stop()
 
 def run_client(args):
     pipeline = Pipeline(args.pipeline)
@@ -490,47 +534,89 @@ def run_client(args):
         os.mkdir(args.workdir)
     workdir = tempfile.mkdtemp(dir=args.workdir, prefix="simplechain_client_")
     os.mkdir(os.path.join(workdir, "work"))
-    queue = zk.Queue(ZOO_BASE + pipeline.name + "/queue")
-    while 1:
-        print "Getting Queue Item"
-        item_txt = queue.get()
-        if item_txt is None:
-            break
-        item_data = json.loads(item_txt)
-        workfile = os.path.join(workdir, item_data['id'])
-        with open(workfile, "w") as handle:
-            handle.write(item_txt)
-        cmd = [sys.executable, SCRIPT_PATH, pipeline.base, "run",
-            "-z", args.zookeeper,
-            "--docker",
-            "--workdir", os.path.join(workdir, "work")]
-        if args.clean:
-            cmd += ['--clean']
-        if args.skip_sudo:
-            cmd += ['--skip-sudo']
-        cmd += [workfile ]
-        print "Running:" + " ".join(cmd)
-        subprocess.check_call(cmd)
-        print "Client Complete"
-    if args.clean:
-        shutil.rmtree(workdir)
-    zk.stop()
+    try:
+        while 1:
+            queue = zk.Queue(ZOO_BASE + pipeline.name + "/queue")
+            logging.info( "Getting Queue Item. Queue length: %d" % ( len(queue) ) )
+            item_txt = queue.get()
+            if item_txt is None:
+                break
+            item_data = json.loads(item_txt)
+            logging.info( "Got item %s" % item_data['id'] )
+            workfile = os.path.join(workdir, item_data['id'])
+            with open(workfile, "w") as handle:
+                handle.write(item_txt)
+            cmd = [sys.executable, SCRIPT_PATH, pipeline.base, "run",
+                "-z", args.zookeeper,
+                "--docker",
+                "--workdir", os.path.join(workdir, "work")]
+            if args.clean:
+                cmd += ['--clean']
+            if args.skip_sudo:
+                cmd += ['--skip-sudo']
+            cmd += [workfile ]
+            logging.info( "Running:" + " ".join(cmd) )
+            try:
+                subprocess.check_call(cmd)
+                logging.info( "Request Complete" )
+            except:
+                logging.info( "Request Error!" )
+    finally:
+        #if args.clean:
+        #    shutil.rmtree(workdir)
+        zk.stop()
 
 
 main_page="""<html>
 <head><title>${name}</title></head>
 <body>
+
+<a href="#active">Active</a> (${len(active)}) | <a href="#error">Error</a> (${len(error)}) | <a href="#complete">Complete</a> (${len(complete)}) | <a href="#workers">Workers</a> (${len(workers)}) | <a href="#queued">Queued</a> (${len(queued)})
+
+<hr>
+
 <div>
-    <div>Active</div>
+    <div><a id="active"/>Active (${len(active)})</div>
     <table>
-        <tr><td>ID</td><td>STATE</td></tr>
+        <tr><td>ID</td><td>HOST</td><td>Stage</td><td>State</td><td>Workdir</td></tr>
     % for row in active:
-        ${makerow(['id', 'status'], row)}
+        ${makerow(['id', 'host', 'stage', 'status', 'workdir'], row)}
     % endfor
     </table>
 </div>
+<hr>
 <div>
-    <div>Queued</div>
+    <div><a id="error"/>Error (${len(error)})</div>
+    <table>
+        <tr><td>ID</td><td>HOST</td><td>Stage</td><td>State</td><td>Workdir</td></tr>
+    % for row in error:
+        ${makerow(['id', 'host', 'stage', 'status', 'workdir'], row)}
+    % endfor
+    </table>
+</div>
+<hr>
+<div>
+    <div><a id="complete"/>Complete (${len(complete)})</div>
+    <table>
+        <tr><td>ID</td><td>Host</td><td>workdir</td></tr>
+    % for row in complete:
+        ${makerow(['id', 'host', 'workdir'], row)}
+    % endfor
+    </table>
+</div>
+<hr>
+<div>
+    <div><a id="workers"/>Workers (${len(workers)})</div>
+    <table>
+        <tr><td>HOST</td><td>DISK</td></tr>
+    % for row in workers:
+        ${makerow(['host', 'disk'], row)}
+    % endfor
+    </table>
+</div>
+<hr>
+<div>
+    <div><a id="queued"/>Queued (${len(queued)})</div>
     <table>
         <tr><td>ID</td><td>PARAMS</td></tr>
     % for row in queued:
@@ -595,15 +681,49 @@ def run_web(args):
     class MainHandler(tornado.web.RequestHandler):
         def get(self):
             active = []
+            complete = []
+            error = []
             for child in zk.get_children(ZOO_BASE + pipeline.name + "/status"):
                 txt, info = zk.get(ZOO_BASE + pipeline.name + "/status/" + child)
-                print txt
                 data = json.loads(txt)
-                active.append( {
-                    'id' : "<a href='/status/%s'>%s</a>" % (child,child),
-                    'status' : data.get('state', 'unknown'),
-                    'data' : json.dumps(data)
+                if data.get('state', "na") == "complete":
+                    complete.append( {
+                        'id' : "<a href='/status/%s'>%s</a>" % (child,child),
+                        'status' : data.get('state', 'unknown'),
+                        'stage':data.get('stage', 'unknown'),
+                        'host':data.get('host', 'unknown'),
+                        'workdir' : data.get('workdir', 'unknown'),
+                        'data' : json.dumps(data)
+                    })                    
+                elif data.get('state', "na") == "error":
+                    error.append( {
+                        'id' : "<a href='/status/%s'>%s</a>" % (child,child),
+                        'status' : data.get('state', 'unknown'),
+                        'stage':data.get('stage', 'unknown'),
+                        'host':data.get('host', 'unknown'),
+                        'workdir' : data.get('workdir', 'unknown'),
+                        'data' : json.dumps(data)
+                    })                   
+                else:
+                    active.append( {
+                        'id' : "<a href='/status/%s'>%s</a>" % (child,child),
+                        'status' : data.get('state', 'unknown'),
+                        'stage':data.get('stage', 'unknown'),
+                        'host':data.get('host', 'unknown'),
+                        'workdir' : data.get('workdir', 'unknown'),
+                        'data' : json.dumps(data)
+                    })
+            active.sort(key=lambda x:x['host'])
+            workers = []
+            for child in zk.get_children(ZOO_BASE + pipeline.name + "/workers"):
+                txt, info = zk.get(ZOO_BASE + pipeline.name + "/workers/" + child)
+                data = json.loads(txt)
+                workers.append( {
+                    'host' : data.get('host', 'unknown'),
+                    'disk':data.get('disk', 'na')
                 })
+            workers.sort(key=lambda x:x['host'])
+
             queued = []
             for child in zk.get_children(ZOO_BASE + pipeline.name + "/queue"):
                 txt, info = zk.get(ZOO_BASE + pipeline.name + "/queue/" + child)
@@ -613,7 +733,7 @@ def run_web(args):
                     'data' : json.dumps(data)
                 })
 
-            self.write(mako.template.Template(main_page).render(name=pipeline.name, queued=queued, active=active))
+            self.write(mako.template.Template(main_page).render(name=pipeline.name, queued=queued, error=error, active=active, complete=complete, workers=workers))
 
     class StatusHandler(tornado.web.RequestHandler):
         def get(self, id):
@@ -622,7 +742,6 @@ def run_web(args):
             stages = []
             for stage_name in zk.get_children(ZOO_BASE + pipeline.name + "/status/" + id):
                 txt, info = zk.get(ZOO_BASE + pipeline.name + "/status/" + id + "/" + stage_name)
-                print txt
                 stage_data = json.loads(txt)
                 stages.append( {'name' : "<a href='%s/%s'>%s</a>" % (id, stage_name, stage_name), 'state' : stage_data['state']})
             self.write(mako.template.Template(status_page).render(name=id, id=id, stages=stages, **data))
@@ -700,6 +819,25 @@ if __name__ == "__main__":
     parser_queue_list = subparsers.add_parser('queue-list')
     parser_queue_list.add_argument("-z", "--zookeeper", default="127.0.0.1:2181")
     parser_queue_list.set_defaults(func=run_queue_list)
+
+    parser_status_list = subparsers.add_parser('status-list')
+    parser_status_list.add_argument("-z", "--zookeeper", default="127.0.0.1:2181")
+    parser_status_list.set_defaults(func=run_status_list)
+
+    parser_worker_list = subparsers.add_parser('worker-list')
+    parser_worker_list.add_argument("-z", "--zookeeper", default="127.0.0.1:2181")
+    parser_worker_list.set_defaults(func=run_worker_list)
+
+    parser_reset = subparsers.add_parser('reset')
+    parser_reset.add_argument("-z", "--zookeeper", default="127.0.0.1:2181")
+    parser_reset.add_argument("jobid")
+    parser_reset.set_defaults(func=run_reset)
+
+    parser_delete = subparsers.add_parser('delete')
+    parser_delete.add_argument("-z", "--zookeeper", default="127.0.0.1:2181")
+    parser_delete.add_argument("jobs", nargs="+")
+    parser_delete.set_defaults(func=run_delete)
+
 
     parser_client = subparsers.add_parser('client')
     parser_client.add_argument("-z", "--zookeeper", default="127.0.0.1:2181")
