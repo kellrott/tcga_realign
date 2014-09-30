@@ -35,7 +35,7 @@ sub synthesize_new_analysis()
 	while(my $line = <IN>)
 	{
 		chomp($line);
-		$line =~ s/alias="[^"]*"/data_block_name="$filename"/;
+		$line =~ s/alias="[^"]*"/alias="$filename"/;
 		$line =~ s/analysis_date="[^"]*"/analysis_date="$date"/;
 		$line =~ s/data_block_name="[^"]*"/data_block_name="$filename"/;
 		$line =~ s/DATA_BLOCK name="[^"]*"/DATA_BLOCK name="$filename"/;
