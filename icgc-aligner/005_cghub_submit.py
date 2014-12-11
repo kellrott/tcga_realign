@@ -51,7 +51,8 @@ def cghub_submit(UUID, NEW_UUID, BAM_FILE, ORIG_BAM_FILE, MD5, NORMAL_UUID, NEW_
 
     if os.path.exists(FIN_DIR):
         sys.stderr.write("Upload already FINISHED\n")
-        sys.exit(0)
+        #sys.exit(0)
+        raise Exception("Upload already FINISHED")
 
     if not os.path.exists(SUB_DIR):
         os.mkdir(SUB_DIR)
