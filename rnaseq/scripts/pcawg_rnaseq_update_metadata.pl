@@ -5,13 +5,14 @@ use strict;
 my $date = `date +%Y-%m-%dT%T`;
 chomp($date);
 
-my $TEMPLATE_ANALYSIS='analysis.pcawg_rnaseq.STAR_template.xml';
+#my $TEMPLATE_ANALYSIS='analysis.pcawg_rnaseq.STAR_template.xml';
 my $RUN_LABELS='<RUN_LABELS>';
 my $RUN_LABELS_STOP='<\/RUN_LABELS>';
 my $TARGETS='<TARGETS>';
 my $TARGETS_STOP='<\/TARGETS>';
 my $FAILED_READS='(<alignment_includes_failed_reads>.+<\/alignment_includes_failed_reads>)';
 
+my $template_analysis_xml = shift;
 my $analysis_xml = shift;
 my $filename = shift;
 my $md5 = shift;
@@ -22,15 +23,16 @@ sub main()
 {
 	#`rsync -av $analysis_xml $analysis_xml.old`;
 	my $md_lines = extract_old_metadata_elements($analysis_xml);
-	synthesize_new_analysis($md_lines,$filename,$md5,$TEMPLATE_ANALYSIS,$analysis_xml);
+	synthesize_new_analysis($md_lines,$filename,$md5,$template_analysis_xml,$analysis_xml);
 }
 
 sub synthesize_new_analysis()
 {
 	my ($md_lines,$filename,$md5,$templateF,$analysisF) = @_;
-	`rsync -av $templateF $analysisF.temp`;
+	#`rsync -av $templateF $analysisF.temp`;
 	
-	open(IN,"<$analysisF.temp");
+	#open(IN,"<$analysisF.temp");
+	open(IN,"<$templateF");
 	open(OUT,">$analysisF");
 	while(my $line = <IN>)
 	{
@@ -72,8 +74,6 @@ sub synthesize_new_analysis()
 	close(IN);
 	close(OUT);
 }		
-		
-	
 
 
 sub extract_old_metadata_elements($)
