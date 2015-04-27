@@ -35,7 +35,8 @@ FILENAME="TCGA_MC3.%s" % (paths[-1])
 NEW_UUID=options.new_uuid
 
 ANALYSIS_CENTER='UCSC'
-TITLE='TCGA Variant Multi-Center Calling 3 (MC3) reprocessed BAM: indel realigned and base quality recalibrated with GATK.'
+STUDY='_TCGA_MC3'
+TITLE='WARNING: VOLATILE DATA, these data are temporarily available for support of the MC3 effort and will be removed in the near future.  TCGA Variant Multi-Center Calling 3 (MC3) reprocessed BAM: indel realigned and base quality recalibrated with GATK.'
 PIPELINE_INFO_HEADER_BY_RG='participant_id|sample_id|target_sample_refname|aliquot_id|library|platform_unit|read_group_id|analysis_id|bam_file'
 
 
@@ -201,10 +202,10 @@ def extract_pipeline_sections_from_bam_header(filename):
 
 def create_process_indel_realignment_and_base_quality_recal_sections():
     section_names = ["STEP_INDEX","PREV_STEP_INDEX","PROGRAM","VERSION","NOTES"]
-    info = [{"PROGRAM":"GATK RealignerTargetCreator","section_name":"INDEL Realignment-1","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -Xmx12 -XX:ParallelGCThreads=2 -jar GenomeAnalysisTK.jar -T RealignerTargetCreator -nt 8 -R reference.fasta -I input.bam -knownSites known_sites.vcf --downsampling_type NONE -o output.bam"},
-            {"PROGRAM":"GATK IndelRealigner","section_name":"INDEL Realignment-2","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -Xmx12 -XX:ParallelGCThreads=2 .jar -T IndelRealigner -R reference.fasta -I input.bam -L ${INTERVAL} .targetIntervals ${TARGET_INTERVALS} --downsampling_type NONE -knownSites known_sites.vcf -maxReads 720000 -maxInMemory 5400000 -nWayOut ${OUTPUT_MAP}"},
-            {"PROGRAM":"GATK BaseRecalibrator","section_name":"Base Recalibration-1","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -jar GenomeAnalysisTK.jar -T BaseRecalibrator -R reference.fasta -I input.bam -knownSites known_sites.vcf -nct 4 -o recal_data.table"},
-            {"PROGRAM":"GATK PrintReads","section_name":"Base Recalibration-2","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -jar GenomeAnalysisTK.jar -T PrintReads -R reference.fasta --emit_original_quals  -I input.bam -nct 4 -BQSR recal_data.table -o output.bam"}]
+    info = [{"PROGRAM":"GATK RealignerTargetCreator","section_name":"MC3 INDEL Realignment-1","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -Xmx12 -XX:ParallelGCThreads=2 -jar GenomeAnalysisTK.jar -T RealignerTargetCreator -nt 8 -R reference.fasta -I input.bam -knownSites known_sites.vcf --downsampling_type NONE -o output.bam"},
+            {"PROGRAM":"GATK IndelRealigner","section_name":"MC3 INDEL Realignment-2","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -Xmx12 -XX:ParallelGCThreads=2 .jar -T IndelRealigner -R reference.fasta -I input.bam -L ${INTERVAL} .targetIntervals ${TARGET_INTERVALS} --downsampling_type NONE -knownSites known_sites.vcf -maxReads 720000 -maxInMemory 5400000 -nWayOut ${OUTPUT_MAP}"},
+            {"PROGRAM":"GATK BaseRecalibrator","section_name":"MC3 Base Recalibration-1","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -jar GenomeAnalysisTK.jar -T BaseRecalibrator -R reference.fasta -I input.bam -knownSites known_sites.vcf -nct 4 -o recal_data.table"},
+            {"PROGRAM":"GATK PrintReads","section_name":"MC3 Base Recalibration-2","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -jar GenomeAnalysisTK.jar -T PrintReads -R reference.fasta --emit_original_quals  -I input.bam -nct 4 -BQSR recal_data.table -o output.bam"}]
     pipe_sections=[]
     for map_ in info:
         e=xp.Element("PIPE_SECTION")
@@ -231,6 +232,8 @@ def process_analysis_xml(original_uuid,filename,checksum,path):
     title.text = "%s %s" % (TITLE,title.text)
     #desc=root_orig.find("ANALYSIS/DESCRIPTION")
     #desc.text = desc.text.replace("PARTICIPANT1",participant_id)
+    study=root_orig.find("ANALYSIS/STUDY_REF")
+    study.set('refname',STUDY)
 
     #4) update FILES block with specific file info
     file = root_orig.find('ANALYSIS/DATA_BLOCK/FILES/FILE')
@@ -304,6 +307,7 @@ def main():
     outf.write("%s\t%s\n"%(ANALYSIS_ID,nuuid))
     outf.close()
 	
+    sys.stdout.write("ID_MAP_OLD2NEW\t%s\t%s\t%s" % (ANALYSIS_ID,nuuid,FILENAME))
 
 if __name__ == '__main__':
     main()
