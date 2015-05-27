@@ -34,11 +34,21 @@ paths=PATH_TO_FILE.split('/')
 FILENAME="TCGA_MC3.%s" % (paths[-1])
 NEW_UUID=options.new_uuid
 
-ANALYSIS_CENTER='UCSC'
+ANALYSIS_CENTER='OHSU'
 STUDY='_TCGA_MC3'
-TITLE='WARNING: VOLATILE DATA, these data are temporarily available for support of the MC3 effort and will be removed in the near future.  TCGA Variant Multi-Center Calling 3 (MC3) reprocessed BAM: indel realigned and base quality recalibrated with GATK.'
+TITLE='WARNING: VOLATILE DATA, these data are temporarily available for support of the MC3 effort and will be removed in the near future.  TCGA Variant Multi-Center Calling 3 (MC3) reprocessed BAM (by Broad): full realignment with BWA, MarkDuplicates, and indel realigned.'
 PIPELINE_INFO_HEADER_BY_RG='participant_id|sample_id|target_sample_refname|aliquot_id|library|platform_unit|read_group_id|analysis_id|bam_file'
 
+
+generic_pipeline_info = [{"PROGRAM":"GATK RealignerTargetCreator","section_name":"MC3 INDEL Realignment-1","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -Xmx12 -XX:ParallelGCThreads=2 -jar GenomeAnalysisTK.jar -T RealignerTargetCreator -nt 8 -R reference.fasta -I input.bam -knownSites known_sites.vcf --downsampling_type NONE -o output.bam"},
+            {"PROGRAM":"GATK IndelRealigner","section_name":"MC3 INDEL Realignment-2","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -Xmx12 -XX:ParallelGCThreads=2 .jar -T IndelRealigner -R reference.fasta -I input.bam -L ${INTERVAL} .targetIntervals ${TARGET_INTERVALS} --downsampling_type NONE -knownSites known_sites.vcf -maxReads 720000 -maxInMemory 5400000 -nWayOut ${OUTPUT_MAP}"},
+            {"PROGRAM":"GATK BaseRecalibrator","section_name":"MC3 Base Recalibration-1","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -jar GenomeAnalysisTK.jar -T BaseRecalibrator -R reference.fasta -I input.bam -knownSites known_sites.vcf -nct 4 -o recal_data.table"},
+            {"PROGRAM":"GATK PrintReads","section_name":"MC3 Base Recalibration-2","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -jar GenomeAnalysisTK.jar -T PrintReads -R reference.fasta --emit_original_quals  -I input.bam -nct 4 -BQSR recal_data.table -o output.bam"}]
+
+bi_pipeline_info = [{"PROGRAM":"bwa aln","section_name":"MC3 Realignment","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"0.5.9-tpx","NOTES":"[one run per read group X] bwa aln Homo_sapiens_assembly19.fasta -q 5 -l 32 -k 2 -t $NSLOTS -o 1 -f Homo_sapiens_assembly19.X.sai input_read_group.X.fastq"},
+            {"PROGRAM":"Picard MarkDuplicates","section_name":"MC3 Mark Duplicates","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"1.716(1956)","NOTES":"net.sf.picard.sam.MarkDuplicates INPUT=[input.bam] OUTPUT=output.aligned.duplicates_marked.bam METRICS_FILE=input.bam.duplicate_metrics TMP_DIR=[/local/scratch, /seq/picardtemp3, /seq/picardtemp4] VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true CREATE_MD5_FILE=true    PROGRAM_RECORD_ID=MarkDuplicates PROGRAM_GROUP_NAME=MarkDuplicates REMOVE_DUPLICATES=false ASSUME_SORTED=false MAX_SEQUENCES_FOR_DISK_READ_ENDS_MAP=50000 MAX_FILE_HANDLES_FOR_READ_ENDS_MAP=8000 SORTING_COLLECTION_SIZE_RATIO=0.25 READ_NAME_REGEX=[a-zA-Z0-9]+:[0-9]:([0-9]+):([0-9]+):([0-9]+).* OPTICAL_DUPLICATE_PIXEL_DISTANCE=100 VERBOSITY=INFO QUIET=false COMPRESSION_LEVEL=1 MAX_RECORDS_IN_RAM=500000"},
+            {"PROGRAM":"GATK IndelRealigner","section_name":"MC3 INDEL Realignment","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"2.6-18-gef514d7-picard_2013_12_10","NOTES":"[one run per read group X] knownAlleles=[(RodBinding name=knownAlleles source=Homo_sapiens_assembly19.dbsnp.vcf), (RodBinding name=knownAlleles2 source=Homo_sapiens_assembly19.known_indels.vcf), (RodBinding name=knownAlleles3 source=Homo_sapiens_assembly19.variantEvalGoldStandard.vcf)] targetIntervals=X.merged.intervals LODThresholdForCleaning=5.0 out=null bam_compression=null disable_bam_indexing=null generate_md5=null simplifyBAM=null consensusDeterminationModel=USE_READS entropyThreshold=0.15 maxReadsInMemory=150000 maxIsizeForMovement=3000 maxPositionalMoveAllowed=200 maxConsensuses=30 maxReadsForConsensuses=120 maxReadsForRealignment=20000 noOriginalAlignmentTags=false nWayOut=X.final_input_bams.map generate_nWayOut_md5s=false check_early=false noPGTag=false keepPGTags=false indelsFileForDebugging=null statisticsFileForDebugging=X.indel.stats SNPsFileForDebugging=null"},
+            {"PROGRAM":"GATK PrintReads","section_name":"MC3 PrintReads","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"2.6-18-gef514d7-picard_2013_12_10","NOTES":"readGroup=null platform=null number=-1 sample_file=[] sample_name=[] simplify=false no_pg_tag=false"}]
 
 if ANALYSIS_ID is None or CHECKSUM is None or PATH_TO_FILE is None:
     sys.stderr.write("MUST submit: the original TCGA source BAM's analysis_id(uuid), MD5 checksum, and the full path to the file\n")
@@ -199,13 +209,8 @@ def extract_pipeline_sections_from_bam_header(filename):
     #foreach ps in pipe_sections
     return pipe_sections
                      
-
-def create_process_indel_realignment_and_base_quality_recal_sections():
+def create_process_indel_realignment_and_base_quality_recal_sections(info):
     section_names = ["STEP_INDEX","PREV_STEP_INDEX","PROGRAM","VERSION","NOTES"]
-    info = [{"PROGRAM":"GATK RealignerTargetCreator","section_name":"MC3 INDEL Realignment-1","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -Xmx12 -XX:ParallelGCThreads=2 -jar GenomeAnalysisTK.jar -T RealignerTargetCreator -nt 8 -R reference.fasta -I input.bam -knownSites known_sites.vcf --downsampling_type NONE -o output.bam"},
-            {"PROGRAM":"GATK IndelRealigner","section_name":"MC3 INDEL Realignment-2","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -Xmx12 -XX:ParallelGCThreads=2 .jar -T IndelRealigner -R reference.fasta -I input.bam -L ${INTERVAL} .targetIntervals ${TARGET_INTERVALS} --downsampling_type NONE -knownSites known_sites.vcf -maxReads 720000 -maxInMemory 5400000 -nWayOut ${OUTPUT_MAP}"},
-            {"PROGRAM":"GATK BaseRecalibrator","section_name":"MC3 Base Recalibration-1","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -jar GenomeAnalysisTK.jar -T BaseRecalibrator -R reference.fasta -I input.bam -knownSites known_sites.vcf -nct 4 -o recal_data.table"},
-            {"PROGRAM":"GATK PrintReads","section_name":"MC3 Base Recalibration-2","PREV_STEP_INDEX":"NULL","STEP_INDEX":"NULL","VERSION":"","NOTES":"java -jar GenomeAnalysisTK.jar -T PrintReads -R reference.fasta --emit_original_quals  -I input.bam -nct 4 -BQSR recal_data.table -o output.bam"}]
     pipe_sections=[]
     for map_ in info:
         e=xp.Element("PIPE_SECTION")
@@ -226,6 +231,12 @@ def process_analysis_xml(original_uuid,filename,checksum,path):
     root_orig=tree_orig.getroot()
     
     now=datetime.datetime.today().isoformat() 
+    
+    #update analsyis center_name and date
+    analysis_ = root_orig.find("ANALYSIS")
+    analysis_.set('center_name',ANALYSIS_CENTER)
+    analysis_.set('analysis_center',ANALYSIS_CENTER)
+    analysis_.set('analysis_date',now)
 
     #update title and description with sample and participant 
     title=root_orig.find("ANALYSIS/TITLE")
@@ -243,8 +254,9 @@ def process_analysis_xml(original_uuid,filename,checksum,path):
     #5) update PIPELINE section:
     #pipe_sections=extract_pipeline_sections_from_bam_header("%s/%s" % (path,filename))
     pipeline=root_orig.find("ANALYSIS/ANALYSIS_TYPE/REFERENCE_ALIGNMENT/PROCESSING/PIPELINE")
+    #only for Broad, clear the whole pipeline section
     #pipeline.clear()
-    pipe_sections = create_process_indel_realignment_and_base_quality_recal_sections()
+    pipe_sections = create_process_indel_realignment_and_base_quality_recal_sections(generic_pipeline_info)
     for pipe_section in pipe_sections:
        pipeline.append(pipe_section)
      
